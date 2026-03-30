@@ -9,7 +9,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import { CodexAppServerBridge, RpcResponseError } from "./codexAppServer.js";
 import { isRecord, type RequestId, type RpcError } from "../shared/codex.js";
 
-const PORT = Number(process.env.PORT ?? 4321);
+const PORT = Number(process.env.SERVER_PORT ?? process.env.PORT ?? 4095);
 const RPC_METHODS = [
   "thread/start",
   "thread/resume",
