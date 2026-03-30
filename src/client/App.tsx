@@ -1195,8 +1195,12 @@ function MarkdownBlock(props: { text: string }) {
                   PreTag="div"
                   customStyle={{
                     margin: 0,
-                    borderRadius: 16,
-                    background: "#11151d",
+                    borderRadius: 6,
+                    background: "#101010",
+                    border: "1px solid #282828",
+                    padding: "8px 12px",
+                    fontSize: "13px",
+                    lineHeight: "150%",
                   }}
                 >
                   {String(children).replace(/\n$/, "")}
