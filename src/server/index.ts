@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -175,6 +175,49 @@ app.post("/api/server-request/respond", async (request, response) => {
 
 app.post("/api/server/restart", async (_request, response) => {
   await handleJsonRequest(response, async () => bridge.restart());
+});
+
+const CODEX_DIR = path.join(process.env.HOME ?? "", ".codex", "projects");
+
+function ensureCodexDir() {
+  mkdirSync(path.join(CODEX_DIR, "icons"), { recursive: true });
+}
+
+app.get("/api/projects/state", (_request, response) => {
+  ensureCodexDir();
+  const filePath = path.join(CODEX_DIR, "state.json");
+  try {
+    const raw = readFileSync(filePath, "utf-8");
+    response.json(JSON.parse(raw));
+  } catch {
+    response.json({ projects: [], icons: {} });
+  }
+});
+
+app.post("/api/projects/state", (request, response) => {
+  ensureCodexDir();
+  const filePath = path.join(CODEX_DIR, "state.json");
+  writeFileSync(filePath, JSON.stringify(request.body, null, 2));
+  response.json({ ok: true });
+});
+
+app.get("/api/projects/icons/:projectId", (request, response) => {
+  ensureCodexDir();
+  const filePath = path.join(CODEX_DIR, "icons", request.params.projectId);
+  try {
+    const icon = readFileSync(filePath, "utf-8").trim();
+    response.json({ icon });
+  } catch {
+    response.json({ icon: null });
+  }
+});
+
+app.post("/api/projects/icons/:projectId", (request, response) => {
+  ensureCodexDir();
+  const filePath = path.join(CODEX_DIR, "icons", request.params.projectId);
+  const icon = isRecord(request.body) && typeof request.body.icon === "string" ? request.body.icon : "";
+  writeFileSync(filePath, icon);
+  response.json({ ok: true });
 });
 
 const server = createServer(app);

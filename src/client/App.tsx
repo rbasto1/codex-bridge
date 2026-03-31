@@ -9,6 +9,7 @@ import {
   ApiError,
   fetchEnvHome,
   fetchInit,
+  fetchProjectState,
   interruptTurn,
   listAvailableModels,
   listAllThreads,
@@ -18,6 +19,8 @@ import {
   respondToServerRequest,
   restartServer,
   resumeThread,
+  saveProjectIcon,
+  saveProjectState,
   startThread,
   startTurn,
   steerTurn,
@@ -171,6 +174,12 @@ export default function App() {
   const [addProjectDraft, setAddProjectDraft] = useState("");
   const [hiddenProjects, setHiddenProjects] = useState<string[]>([]);
   const [showHiddenProjects, setShowHiddenProjects] = useState(false);
+  const [contextMenuProject, setContextMenuProject] = useState<{ project: string; x: number; y: number } | null>(null);
+  const [showEditProjectModal, setShowEditProjectModal] = useState<string | null>(null);
+  const [projectIcons, setProjectIcons] = useState<Record<string, string>>({});
+  const [projectState, setProjectState] = useState<Array<{ id: string; name: string }>>([]);
+  const [projectRenameDraft, setProjectRenameDraft] = useState("");
+  const longPressTimerRef = useRef<number | null>(null);
 
   const deferredSearchTerm = useDeferredValue(searchTerm.trim().toLowerCase());
 
@@ -230,6 +239,18 @@ export default function App() {
         const home = await fetchEnvHome();
         if (!cancelled) {
           setEnvHome(home);
+        }
+      } catch {
+        // non-critical
+      }
+    })();
+
+    void (async () => {
+      try {
+        const state = await fetchProjectState();
+        if (!cancelled) {
+          setProjectState(state.projects ?? []);
+          setProjectIcons(state.icons ?? {});
         }
       } catch {
         // non-critical
@@ -478,9 +499,12 @@ export default function App() {
 
     setSelectionRestored(true);
 
-    if (initialUi.activeThreadId && threadsById[initialUi.activeThreadId]) {
-      const threadId = initialUi.activeThreadId;
-      const mode = initialUi.activeMode ?? "replay";
+    const hashThreadId = window.location.hash.replace(/^#/, "") || null;
+    const restoreThreadId = (hashThreadId && threadsById[hashThreadId]) ? hashThreadId : initialUi.activeThreadId;
+
+    if (restoreThreadId && threadsById[restoreThreadId]) {
+      const threadId = restoreThreadId;
+      const mode = (hashThreadId && hashThreadId === threadId) ? "live" : (initialUi.activeMode ?? "replay");
 
       void (async () => {
         setThreadLoadingId(threadId);
@@ -492,6 +516,7 @@ export default function App() {
           startTransition(() => {
             hydrateThread(response.thread, mode, extractThreadSessionConfig(response));
           });
+          window.history.replaceState(null, "", `#${threadId}`);
         } catch (error) {
           const message = getErrorMessage(error);
           setSelectedThreadError(message);
@@ -520,6 +545,7 @@ export default function App() {
       startTransition(() => {
         hydrateThread(response.thread, mode, extractThreadSessionConfig(response));
       });
+      window.history.replaceState(null, "", `#${threadId}`);
     } catch (error) {
       const message = getErrorMessage(error);
       setSelectedThreadError(message);
@@ -527,16 +553,6 @@ export default function App() {
     } finally {
       setThreadLoadingId(null);
     }
-  }
-
-  function handleProjectDraftCommit() {
-    const nextProject = projectDraft.trim();
-    if (!nextProject) {
-      return;
-    }
-
-    setCurrentProject(nextProject);
-    setCustomProjects((previous) => (previous.includes(nextProject) ? previous : [...previous, nextProject]));
   }
 
   function handleAddProject() {
@@ -549,11 +565,10 @@ export default function App() {
       resolved = envHome + resolved.slice(1);
     }
 
-    setCurrentProject(resolved);
-    setProjectDraft(resolved);
     setCustomProjects((previous) => (previous.includes(resolved) ? previous : [...previous, resolved]));
     setAddProjectDraft("");
     setShowAddProjectModal(false);
+    handleSelectProject(resolved);
   }
 
   function handleRemoveProject(project: string) {
@@ -562,6 +577,20 @@ export default function App() {
       const remaining = projectOptions.filter((p) => p !== project);
       setCurrentProject(remaining[0] ?? "");
       setProjectDraft(remaining[0] ?? "");
+    }
+  }
+
+  function handleSelectProject(project: string) {
+    if (project === currentProject) return;
+    setCurrentProject(project);
+    setProjectDraft(project);
+    // Auto-select most recent session for this project (task 7)
+    const firstThread = threadOrder.find((tid) => threadsById[tid]?.cwd === project);
+    if (firstThread) {
+      void openThread(firstThread, "live");
+    } else {
+      useAppStore.getState().setActiveThread(null);
+      window.history.replaceState(null, "", window.location.pathname);
     }
   }
 
@@ -578,7 +607,69 @@ export default function App() {
     setHiddenProjects((previous) => previous.filter((p) => p !== project));
   }
 
-  const visibleProjects = projectOptions.filter((p) => !hiddenProjects.includes(p));
+  function handleMoveProject(project: string, direction: -1 | 1) {
+    const idx = visibleProjects.indexOf(project);
+    if (idx < 0) return;
+    const targetIdx = idx + direction;
+    if (targetIdx < 0 || targetIdx >= visibleProjects.length) return;
+    const reordered = [...visibleProjects];
+    [reordered[idx], reordered[targetIdx]] = [reordered[targetIdx], reordered[idx]];
+    // Persist order in projectState
+    setProjectState((prev) => {
+      const next = reordered.map((p) => {
+        const existing = prev.find((e) => e.id === p);
+        return existing || { id: p, name: "" };
+      });
+      persistProjectState(next, projectIcons);
+      return next;
+    });
+  }
+
+  function handleSaveProjectEdit() {
+    if (!showEditProjectModal) return;
+    const project = showEditProjectModal;
+    const projectId = encodeProjectId(project);
+
+    // Save name
+    setProjectState((prev) => {
+      const next = [...prev];
+      const idx = next.findIndex((e) => e.id === project);
+      const entry = { id: project, name: projectRenameDraft.trim() };
+      if (idx >= 0) {
+        next[idx] = entry;
+      } else {
+        next.push(entry);
+      }
+      persistProjectState(next, projectIcons);
+      return next;
+    });
+
+    // Save icon
+    const icon = projectIcons[projectId] || "";
+    void saveProjectIcon(projectId, icon);
+
+    setShowEditProjectModal(null);
+  }
+
+  function persistProjectState(projects: Array<{ id: string; name: string }>, icons: Record<string, string>) {
+    void saveProjectState({ projects, icons });
+  }
+
+  const visibleProjectsUnordered = projectOptions.filter((p) => !hiddenProjects.includes(p));
+  // Respect saved order from projectState
+  const visibleProjects = (() => {
+    if (projectState.length === 0) return visibleProjectsUnordered;
+    const ordered: string[] = [];
+    for (const entry of projectState) {
+      if (visibleProjectsUnordered.includes(entry.id)) {
+        ordered.push(entry.id);
+      }
+    }
+    for (const p of visibleProjectsUnordered) {
+      if (!ordered.includes(p)) ordered.push(p);
+    }
+    return ordered;
+  })();
   const overflowProjects = projectOptions.filter((p) => hiddenProjects.includes(p));
 
   function projectHasSessions(project: string): boolean {
@@ -809,9 +900,12 @@ export default function App() {
     }));
   }
 
-  const sidebarProjectLabel = currentProject
-    ? currentProject.split("/").filter(Boolean).pop() ?? "Codex Web"
-    : "Codex Web";
+  const sidebarProjectLabel = (() => {
+    if (!currentProject) return "Codex Web";
+    const stateEntry = projectState.find((e) => e.id === currentProject);
+    if (stateEntry?.name) return stateEntry.name;
+    return currentProject.split("/").filter(Boolean).pop() ?? "Codex Web";
+  })();
 
   return (
     <div className="app-shell">
@@ -835,44 +929,38 @@ export default function App() {
             <img src={codexLogoUrl} alt="" className="project-rail-brand-logo" />
           </div>
           <div className="project-rail-list">
-            {visibleProjects.map((project) => (
-              <div key={project} className="project-tile-wrapper">
-                <button
-                  type="button"
-                  className={`project-tile ${project === currentProject ? "active" : ""}`}
-                  onClick={() => {
-                    setCurrentProject(project);
-                    setProjectDraft(project);
-                  }}
-                  title={project}
-                >
-                  {formatProjectTileLabel(project)}
-                </button>
-                {project === currentProject ? (
-                  <div className="project-tile-actions">
-                    {!projectHasSessions(project) ? (
-                      <button
-                        type="button"
-                        className="project-tile-action"
-                        onClick={(e) => { e.stopPropagation(); handleRemoveProject(project); }}
-                        title="Delete project"
-                      >
-                        &times;
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="project-tile-action"
-                        onClick={(e) => { e.stopPropagation(); handleHideProject(project); }}
-                        title="Hide project"
-                      >
-                        &#x2212;
-                      </button>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            ))}
+            {visibleProjects.map((project) => {
+              const projectId = encodeProjectId(project);
+              const displayIcon = projectIcons[projectId];
+              const stateEntry = projectState.find((e) => e.id === project);
+              const label = stateEntry?.name || formatProjectTileLabel(project);
+              return (
+                <div key={project} className="project-tile-wrapper">
+                  <button
+                    type="button"
+                    className={`project-tile ${project === currentProject ? "active" : ""}`}
+                    onClick={() => handleSelectProject(project)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setContextMenuProject({ project, x: e.clientX, y: e.clientY });
+                    }}
+                    onTouchStart={() => {
+                      longPressTimerRef.current = window.setTimeout(() => {
+                        const el = document.querySelector(`[data-project="${CSS.escape(project)}"]`);
+                        const rect = el?.getBoundingClientRect();
+                        setContextMenuProject({ project, x: (rect?.right ?? 64) + 4, y: rect?.top ?? 0 });
+                      }, 500);
+                    }}
+                    onTouchEnd={() => { if (longPressTimerRef.current) { window.clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; } }}
+                    onTouchMove={() => { if (longPressTimerRef.current) { window.clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; } }}
+                    title={project}
+                    data-project={project}
+                  >
+                    {displayIcon || label}
+                  </button>
+                </div>
+              );
+            })}
             {overflowProjects.length > 0 ? (
               <div className="project-tile-wrapper">
                 <button
@@ -892,8 +980,7 @@ export default function App() {
                         className="project-overflow-item"
                         onClick={() => {
                           handleUnhideProject(project);
-                          setCurrentProject(project);
-                          setProjectDraft(project);
+                          handleSelectProject(project);
                           setShowHiddenProjects(false);
                         }}
                         title={project}
@@ -1182,6 +1269,113 @@ export default function App() {
               </section>
             )}
       </main>
+
+      {/* Project context menu */}
+      {contextMenuProject ? (
+        <div className="context-menu-backdrop" onClick={() => setContextMenuProject(null)}>
+          <div
+            className="context-menu"
+            style={{ top: contextMenuProject.y, left: contextMenuProject.x }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {projectHasSessions(contextMenuProject.project) ? (
+              <button type="button" className="context-menu-item" onClick={() => {
+                handleHideProject(contextMenuProject.project);
+                setContextMenuProject(null);
+              }}>
+                Hide
+              </button>
+            ) : (
+              <button type="button" className="context-menu-item danger" onClick={() => {
+                handleRemoveProject(contextMenuProject.project);
+                setContextMenuProject(null);
+              }}>
+                Delete
+              </button>
+            )}
+            <button type="button" className="context-menu-item" onClick={() => {
+              const proj = contextMenuProject.project;
+              const stateEntry = projectState.find((e) => e.id === proj);
+              setProjectRenameDraft(stateEntry?.name || proj.split("/").filter(Boolean).pop() || "");
+              setShowEditProjectModal(proj);
+              setContextMenuProject(null);
+            }}>
+              Edit
+            </button>
+            {visibleProjects.indexOf(contextMenuProject.project) > 0 ? (
+              <button type="button" className="context-menu-item" onClick={() => {
+                handleMoveProject(contextMenuProject.project, -1);
+                setContextMenuProject(null);
+              }}>
+                Move up
+              </button>
+            ) : null}
+            {visibleProjects.indexOf(contextMenuProject.project) < visibleProjects.length - 1 ? (
+              <button type="button" className="context-menu-item" onClick={() => {
+                handleMoveProject(contextMenuProject.project, 1);
+                setContextMenuProject(null);
+              }}>
+                Move down
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Edit project modal (icon picker + rename) */}
+      {showEditProjectModal ? (
+        <div className="modal-backdrop" onClick={() => setShowEditProjectModal(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <h3 className="modal-title">Edit project</h3>
+            <label className="field-label">Display name</label>
+            <input
+              className="text-input"
+              autoFocus
+              value={projectRenameDraft}
+              onChange={(e) => setProjectRenameDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); handleSaveProjectEdit(); }
+                if (e.key === "Escape") { e.preventDefault(); setShowEditProjectModal(null); }
+              }}
+              placeholder="Project name"
+            />
+            <label className="field-label" style={{ marginTop: 12 }}>Icon (emoji or 2 characters)</label>
+            <div className="icon-picker-grid">
+              {["📁", "🚀", "🔧", "📦", "🎨", "🔬", "💡", "🌐", "🛠️", "📊", "🎯", "⚡", "🐛", "📝", "🔒", "🏠", "💻", "🎮", "📱", "🧪"].map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  className={`icon-picker-item ${projectIcons[encodeProjectId(showEditProjectModal)] === emoji ? "active" : ""}`}
+                  onClick={() => {
+                    const id = encodeProjectId(showEditProjectModal);
+                    setProjectIcons((prev) => ({ ...prev, [id]: emoji }));
+                  }}
+                >
+                  {emoji}
+                </button>
+              ))}
+              <button
+                type="button"
+                className={`icon-picker-item ${!projectIcons[encodeProjectId(showEditProjectModal)] ? "active" : ""}`}
+                onClick={() => {
+                  const id = encodeProjectId(showEditProjectModal);
+                  setProjectIcons((prev) => {
+                    const next = { ...prev };
+                    delete next[id];
+                    return next;
+                  });
+                }}
+              >
+                Aa
+              </button>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="button primary" onClick={handleSaveProjectEdit}>Save</button>
+              <button type="button" className="button secondary" onClick={() => setShowEditProjectModal(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showAddProjectModal ? (
         <div className="modal-backdrop" onClick={() => setShowAddProjectModal(false)}>
@@ -1974,11 +2168,15 @@ function formatRelativeTime(timestampSeconds: number) {
 }
 
 function formatItemLabel(type: string) {
-  if (type === "userMessage" || type === "agentMessage") {
+  if (type === "userMessage" || type === "agentMessage" || type === "commandExecution") {
     return "";
   }
 
   return type.replace(/([A-Z])/g, " $1").toLowerCase();
+}
+
+function encodeProjectId(project: string): string {
+  return btoa(project).replace(/[/+=]/g, "_");
 }
 
 function formatProjectTileLabel(project: string) {

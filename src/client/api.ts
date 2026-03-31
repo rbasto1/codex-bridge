@@ -231,6 +231,34 @@ export async function respondToServerRequest(body: {
   });
 }
 
+export type ProjectStateData = {
+  projects: Array<{ id: string; name: string }>;
+  icons: Record<string, string>;
+};
+
+export async function fetchProjectState(): Promise<ProjectStateData> {
+  return requestJson<ProjectStateData>("/api/projects/state");
+}
+
+export async function saveProjectState(data: ProjectStateData): Promise<void> {
+  await requestJson("/api/projects/state", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function fetchProjectIcon(projectId: string): Promise<string | null> {
+  const result = await requestJson<{ icon: string | null }>(`/api/projects/icons/${encodeURIComponent(projectId)}`);
+  return result.icon;
+}
+
+export async function saveProjectIcon(projectId: string, icon: string): Promise<void> {
+  await requestJson(`/api/projects/icons/${encodeURIComponent(projectId)}`, {
+    method: "POST",
+    body: JSON.stringify({ icon }),
+  });
+}
+
 async function requestJson<T = unknown>(input: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(input, {
     ...init,
