@@ -1,4 +1,4 @@
-import { startTransition, useDeferredValue, useEffect, useState } from "react";
+import { startTransition, useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -9,6 +9,7 @@ import {
   ApiError,
   fetchInit,
   interruptTurn,
+  listAvailableModels,
   listAllThreads,
   readThread,
   renameThread,
@@ -18,9 +19,25 @@ import {
   startThread,
   startTurn,
   steerTurn,
+  type ModelOption,
+  type ThreadResponse,
+  type ThreadSessionResponse,
 } from "./api";
 import { useAppStore } from "./store";
-import { createTextInput, isRecord, type BrowserEvent, type BrowserServerRequest, type ThreadItem, type UserInput } from "../shared/codex.js";
+import {
+  createTextInput,
+  isRecord,
+  type ApprovalPolicy,
+  type BrowserEvent,
+  type BrowserServerRequest,
+  type CollaborationModeKind,
+  type ReasoningEffort,
+  type SandboxPolicy,
+  type ThreadItem,
+  type ThreadSessionConfig,
+  type UserInput,
+} from "../shared/codex.js";
+import codexLogoUrl from "../../codex.svg";
 
 const STORAGE_KEY = "codex-web-local-ui";
 
@@ -29,6 +46,22 @@ type PersistedUi = {
   activeMode?: "replay" | "live";
   currentProject?: string;
   customProjects?: string[];
+  threadControlDrafts?: Record<string, ComposerControlDraft>;
+  threadPermissionBaselines?: Record<string, PermissionBaseline>;
+};
+
+type ComposerControlDraft = {
+  mode: CollaborationModeKind;
+  model: string;
+  effort: ReasoningEffort | null;
+  fullAccess: boolean;
+};
+
+type ModelChoice = Pick<ModelOption, "displayName" | "model">;
+
+type PermissionBaseline = {
+  approvalPolicy: ApprovalPolicy;
+  sandbox: SandboxPolicy;
 };
 
 export default function App() {
@@ -36,7 +69,6 @@ export default function App() {
   const {
     activeThreadId,
     backendStatus,
-    initializeResponse,
     lastExit,
     pendingServerRequestsById,
     selectedThreadError,
@@ -47,7 +79,6 @@ export default function App() {
     useShallow((state) => ({
       activeThreadId: state.activeThreadId,
       backendStatus: state.backendStatus,
-      initializeResponse: state.initializeResponse,
       lastExit: state.lastExit,
       pendingServerRequestsById: state.pendingServerRequestsById,
       selectedThreadError: state.selectedThreadError,
@@ -66,6 +97,7 @@ export default function App() {
     replaceThreads,
     setSelectedThreadError,
     setSnapshot,
+    setThreadSessionConfig,
     updateThreadName,
   } = useAppStore(
     useShallow((state) => ({
@@ -77,12 +109,16 @@ export default function App() {
       replaceThreads: state.replaceThreads,
       setSelectedThreadError: state.setSelectedThreadError,
       setSnapshot: state.setSnapshot,
+      setThreadSessionConfig: state.setThreadSessionConfig,
       updateThreadName: state.updateThreadName,
     })),
   );
 
   const currentThread = useAppStore((state) =>
     state.activeThreadId ? state.threadsById[state.activeThreadId] ?? null : null,
+  );
+  const currentThreadSessionConfig = useAppStore((state) =>
+    state.activeThreadId ? state.threadSessionConfigById[state.activeThreadId] ?? null : null,
   );
   const currentMode = useAppStore((state) =>
     state.activeThreadId ? state.threadModes[state.activeThreadId] ?? "replay" : "replay",
@@ -98,13 +134,29 @@ export default function App() {
     state.activeThreadId ? Boolean(state.nonSteerableThreadIds[state.activeThreadId]) : false,
   );
 
+  const isMobile = () => window.innerWidth < 768;
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(isMobile);
+  const toggleSidebar = useCallback(() => setSidebarCollapsed((v) => !v), []);
+  const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const focusComposerAfterLoadRef = useRef(false);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [currentProject, setCurrentProject] = useState(initialUi.currentProject ?? "");
   const [customProjects, setCustomProjects] = useState<string[]>(initialUi.customProjects ?? []);
   const [projectDraft, setProjectDraft] = useState(initialUi.currentProject ?? "");
   const [renameDraft, setRenameDraft] = useState("");
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [composerDrafts, setComposerDrafts] = useState<Record<string, string>>({});
+  const [threadControlDrafts, setThreadControlDrafts] = useState<Record<string, ComposerControlDraft>>(
+    initialUi.threadControlDrafts ?? {},
+  );
+  const [threadPermissionBaselines, setThreadPermissionBaselines] = useState<Record<string, PermissionBaseline>>(
+    initialUi.threadPermissionBaselines ?? {},
+  );
+  const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
   const [listLoading, setListLoading] = useState(false);
+  const [modelsLoading, setModelsLoading] = useState(false);
   const [threadLoadingId, setThreadLoadingId] = useState<string | null>(null);
   const [isStartingThread, setIsStartingThread] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -140,9 +192,15 @@ export default function App() {
   });
 
   const composerValue = activeThreadId ? composerDrafts[activeThreadId] ?? "" : "";
+  const composerControlDraft = activeThreadId ? threadControlDrafts[activeThreadId] ?? null : null;
+  const modelChoices = composerControlDraft ? listModelChoices(availableModels, composerControlDraft.model) : [];
+  const selectedModel = composerControlDraft ? findModelOption(availableModels, composerControlDraft.model) : null;
+  const reasoningOptions = selectedModel?.supportedReasoningEfforts ?? [];
   const isLive = currentMode === "live";
   const waitingOnUserAction = currentWaitingFlags.includes("waitingOnApproval") || currentWaitingFlags.includes("waitingOnUserInput");
   const canCompose = Boolean(currentThread && isLive && backendStatus === "ready" && !waitingOnUserAction && !isCurrentThreadNonSteerable);
+  const isStreaming = Boolean(activeTurnId) && !waitingOnUserAction;
+  const composerControlsDisabled = !currentThread || !isLive || Boolean(activeTurnId) || modelsLoading;
 
   useEffect(() => {
     let cancelled = false;
@@ -250,13 +308,139 @@ export default function App() {
   }, [backendStatus, replaceThreads]);
 
   useEffect(() => {
+    if (backendStatus !== "ready") {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      setModelsLoading(true);
+      try {
+        const models = await listAvailableModels();
+        if (!cancelled) {
+          setAvailableModels(models);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setActionError(getErrorMessage(error));
+        }
+      } finally {
+        if (!cancelled) {
+          setModelsLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [backendStatus]);
+
+  useEffect(() => {
     if (!currentThread) {
       setRenameDraft("");
+      setIsEditingTitle(false);
       return;
     }
 
     setRenameDraft(currentThread.name ?? currentThread.preview);
+    setIsEditingTitle(false);
   }, [currentThread]);
+
+  useEffect(() => {
+    if (!isEditingTitle) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [isEditingTitle]);
+
+  useEffect(() => {
+    if (projectOptions.length === 0) {
+      return;
+    }
+
+    if (currentProject && projectOptions.includes(currentProject)) {
+      return;
+    }
+
+    const fallbackProject = projectOptions[0];
+    setCurrentProject(fallbackProject);
+    if (!projectDraft.trim()) {
+      setProjectDraft(fallbackProject);
+    }
+  }, [currentProject, projectDraft, projectOptions]);
+
+  useEffect(() => {
+    if (!focusComposerAfterLoadRef.current || !currentThread || !isLive) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      composerInputRef.current?.focus();
+    });
+
+    focusComposerAfterLoadRef.current = false;
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [currentThread, isLive]);
+
+  useEffect(() => {
+    if (!activeThreadId || !currentThreadSessionConfig || isDangerFullAccess(currentThreadSessionConfig.sandbox)) {
+      return;
+    }
+
+    setThreadPermissionBaselines((previous) => {
+      const currentBaseline = previous[activeThreadId];
+      if (
+        currentBaseline &&
+        currentBaseline.approvalPolicy === currentThreadSessionConfig.approvalPolicy &&
+        JSON.stringify(currentBaseline.sandbox) === JSON.stringify(currentThreadSessionConfig.sandbox)
+      ) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        [activeThreadId]: {
+          approvalPolicy: currentThreadSessionConfig.approvalPolicy,
+          sandbox: currentThreadSessionConfig.sandbox,
+        },
+      };
+    });
+  }, [activeThreadId, currentThreadSessionConfig]);
+
+  useEffect(() => {
+    if (!activeThreadId || !currentThread) {
+      return;
+    }
+
+    setThreadControlDrafts((previous) => {
+      if (previous[activeThreadId]) {
+        return previous;
+      }
+
+      const nextDraft = createComposerControlDraft(currentThreadSessionConfig, availableModels);
+      if (!nextDraft) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        [activeThreadId]: nextDraft,
+      };
+    });
+  }, [activeThreadId, availableModels, currentThread, currentThreadSessionConfig]);
 
   useEffect(() => {
     writePersistedUi({
@@ -264,8 +448,10 @@ export default function App() {
       activeMode: activeThreadId ? currentMode : undefined,
       currentProject,
       customProjects,
+      threadControlDrafts,
+      threadPermissionBaselines,
     });
-  }, [activeThreadId, currentMode, currentProject, customProjects]);
+  }, [activeThreadId, currentMode, currentProject, customProjects, threadControlDrafts, threadPermissionBaselines]);
 
   useEffect(() => {
     if (selectionRestored || threadOrder.length === 0) {
@@ -286,7 +472,7 @@ export default function App() {
         try {
           const response = mode === "live" ? await resumeThread(threadId) : await readThread(threadId);
           startTransition(() => {
-            hydrateThread(response.thread, mode);
+            hydrateThread(response.thread, mode, extractThreadSessionConfig(response));
           });
         } catch (error) {
           const message = getErrorMessage(error);
@@ -304,10 +490,17 @@ export default function App() {
     setActionError(null);
     setSelectedThreadError(null);
 
+    if (isMobile()) {
+      setSidebarCollapsed(true);
+    }
+
     try {
       const response = mode === "live" ? await resumeThread(threadId) : await readThread(threadId);
+      if (mode === "live") {
+        focusComposerAfterLoadRef.current = true;
+      }
       startTransition(() => {
-        hydrateThread(response.thread, mode);
+        hydrateThread(response.thread, mode, extractThreadSessionConfig(response));
       });
     } catch (error) {
       const message = getErrorMessage(error);
@@ -318,7 +511,7 @@ export default function App() {
     }
   }
 
-  async function handleTrackProject() {
+  function handleProjectDraftCommit() {
     const nextProject = projectDraft.trim();
     if (!nextProject) {
       return;
@@ -340,10 +533,11 @@ export default function App() {
 
     try {
       const response = await startThread(cwd);
+      focusComposerAfterLoadRef.current = true;
       setCurrentProject(cwd);
       setCustomProjects((previous) => (previous.includes(cwd) ? previous : [...previous, cwd]));
       startTransition(() => {
-        hydrateThread(response.thread, "live");
+        hydrateThread(response.thread, "live", extractThreadSessionConfig(response));
       });
     } catch (error) {
       setActionError(getErrorMessage(error));
@@ -357,8 +551,16 @@ export default function App() {
       return;
     }
 
+    const originalTitle = currentThread.name ?? currentThread.preview;
     const nextName = renameDraft.trim();
-    if (!nextName || nextName === currentThread.name) {
+    if (!nextName) {
+      setRenameDraft(originalTitle);
+      setIsEditingTitle(false);
+      return;
+    }
+
+    if (nextName === originalTitle) {
+      setIsEditingTitle(false);
       return;
     }
 
@@ -371,14 +573,25 @@ export default function App() {
         updateThreadName(currentThread.id, nextName);
       });
     } catch (error) {
+      setRenameDraft(originalTitle);
       setActionError(getErrorMessage(error));
     } finally {
       setIsRenaming(false);
+      setIsEditingTitle(false);
     }
   }
 
+  function handleCancelRenameThread() {
+    if (!currentThread) {
+      return;
+    }
+
+    setRenameDraft(currentThread.name ?? currentThread.preview);
+    setIsEditingTitle(false);
+  }
+
   async function handleSubmitComposer() {
-    if (!activeThreadId || !currentThread) {
+    if (!activeThreadId || !currentThread || !composerControlDraft) {
       return;
     }
 
@@ -387,6 +600,18 @@ export default function App() {
       return;
     }
 
+    const permissionBaseline = resolvePermissionBaseline(
+      currentThread.cwd,
+      threadPermissionBaselines[activeThreadId],
+      currentThreadSessionConfig,
+    );
+    const nextThreadSessionConfig = buildThreadSessionConfig(
+      currentThread.cwd,
+      composerControlDraft,
+      permissionBaseline,
+      findModelOption(availableModels, composerControlDraft.model),
+    );
+
     setComposerBusy(true);
     setActionError(null);
 
@@ -394,10 +619,22 @@ export default function App() {
       if (activeTurnId) {
         await steerTurn(activeThreadId, activeTurnId, [createTextInput(text)]);
       } else {
-        const response = await startTurn(activeThreadId, [createTextInput(text)]);
+        const response = await startTurn(activeThreadId, [createTextInput(text)], {
+          approvalPolicy: nextThreadSessionConfig.approvalPolicy,
+          sandboxPolicy: nextThreadSessionConfig.sandbox,
+          collaborationMode: {
+            mode: composerControlDraft.mode,
+            settings: {
+              model: nextThreadSessionConfig.model,
+              reasoning_effort: nextThreadSessionConfig.reasoningEffort,
+              developer_instructions: null,
+            },
+          },
+        });
         startTransition(() => {
           noteTurn(activeThreadId, response.turn);
           markNonSteerable(activeThreadId, false);
+          setThreadSessionConfig(activeThreadId, nextThreadSessionConfig);
         });
       }
 
@@ -459,224 +696,377 @@ export default function App() {
     }
   }
 
+  function updateCurrentThreadControls(updater: (current: ComposerControlDraft) => ComposerControlDraft) {
+    if (!activeThreadId || !composerControlDraft) {
+      return;
+    }
+
+    setThreadControlDrafts((previous) => ({
+      ...previous,
+      [activeThreadId]: updater(previous[activeThreadId] ?? composerControlDraft),
+    }));
+  }
+
+  function handleSelectComposerMode(mode: CollaborationModeKind) {
+    updateCurrentThreadControls((current) => ({
+      ...current,
+      mode,
+    }));
+  }
+
+  function handleSelectComposerModel(model: string) {
+    const modelOption = findModelOption(availableModels, model);
+    updateCurrentThreadControls((current) => ({
+      ...current,
+      model,
+      effort: normalizeReasoningEffort(modelOption, current.effort),
+    }));
+  }
+
+  function handleSelectComposerEffort(effort: ReasoningEffort) {
+    updateCurrentThreadControls((current) => ({
+      ...current,
+      effort,
+    }));
+  }
+
+  function handleToggleFullAccess() {
+    updateCurrentThreadControls((current) => ({
+      ...current,
+      fullAccess: !current.fullAccess,
+    }));
+  }
+
+  const sidebarProjectLabel = currentProject
+    ? currentProject.split("/").filter(Boolean).pop() ?? "Codex Web"
+    : "Codex Web";
+
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand-card">
-          <p className="eyebrow">Local control surface</p>
-          <h1>Codex Web</h1>
-          <p className="brand-copy">
-            One browser client, one long-lived local backend, and the real `codex app-server` session history.
-          </p>
+      {/* Mobile backdrop */}
+      <button
+        type="button"
+        className={`sidebar-backdrop ${sidebarCollapsed ? "hidden" : ""}`}
+        onClick={() => setSidebarCollapsed(true)}
+      />
+
+      {/* Floating toggle when sidebar hidden */}
+      {sidebarCollapsed ? (
+        <button type="button" className="floating-toggle" onClick={toggleSidebar} title="Open sidebar">
+          &#9776;
+        </button>
+      ) : null}
+
+      <aside className={`sidebar ${sidebarCollapsed ? "collapsed" : ""}`}>
+        <div className="project-rail">
+          <div className="project-rail-brand" title="Codex Web">
+            <img src={codexLogoUrl} alt="" className="project-rail-brand-logo" />
+          </div>
+          <div className="project-rail-list">
+            {projectOptions.map((project) => (
+              <button
+                key={project}
+                type="button"
+                className={`project-tile ${project === currentProject ? "active" : ""}`}
+                onClick={() => {
+                  setCurrentProject(project);
+                  setProjectDraft(project);
+                }}
+                title={project}
+              >
+                {formatProjectTileLabel(project)}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="control-block">
-          <label className="field-label" htmlFor="session-search">
-            Search sessions
-          </label>
+        <div className="sidebar-panel">
+          <div className="sidebar-header">
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <h1 className="sidebar-title">{sidebarProjectLabel}</h1>
+            </div>
+            <button type="button" className="sidebar-toggle" onClick={toggleSidebar} title="Collapse sidebar">
+              &#x2190;
+            </button>
+          </div>
+
+          <button
+            type="button"
+            className="sidebar-new-session"
+            onClick={() => void handleStartThread()}
+            disabled={backendStatus !== "ready" || isStartingThread}
+          >
+            {isStartingThread ? "Starting..." : "New Session"}
+          </button>
+
           <input
-            id="session-search"
-            className="text-input"
+            className="sidebar-search"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="name, preview, cwd"
+            placeholder="Search sessions..."
           />
-        </div>
 
-        <div className="session-stats">
-          <span>{listLoading ? "Loading sessions..." : `${filteredThreadIds.length} sessions`}</span>
-          <span>{initializeResponse?.codexHome ?? "App-server not ready"}</span>
-        </div>
+          <div className="sidebar-stats">
+            <span>{listLoading ? "Loading..." : `${filteredThreadIds.length} sessions`}</span>
+          </div>
 
-        <div className="session-list">
-          {filteredThreadIds.map((threadId) => (
-            <SessionRow
-              key={threadId}
-              threadId={threadId}
-              active={threadId === activeThreadId}
-              loading={threadLoadingId === threadId}
-              onOpenReplay={() => void openThread(threadId, "replay")}
-              onOpenLive={() => void openThread(threadId, "live")}
-            />
-          ))}
-          {!listLoading && filteredThreadIds.length === 0 ? (
-            <div className="empty-card small-empty">No sessions match the current filter.</div>
-          ) : null}
+          <div className="session-list">
+            {filteredThreadIds.map((threadId) => (
+              <SessionRow
+                key={threadId}
+                threadId={threadId}
+                active={threadId === activeThreadId}
+                onOpen={() => void openThread(threadId, "live")}
+              />
+            ))}
+            {!listLoading && filteredThreadIds.length === 0 ? (
+              <div className="empty-card small-empty">No sessions match the current project.</div>
+            ) : null}
+          </div>
         </div>
       </aside>
 
       <main className="workspace">
-        <header className="project-bar">
-          <div className="project-bar-group">
-            <label className="field-label" htmlFor="project-filter">
-              Project filter
-            </label>
-            <select
-              id="project-filter"
-              className="select-input"
-              value={currentProject}
-              onChange={(event) => {
-                setCurrentProject(event.target.value);
-                if (event.target.value) {
-                  setProjectDraft(event.target.value);
-                }
-              }}
-            >
-              <option value="">All projects</option>
-              {projectOptions.map((project) => (
-                <option key={project} value={project}>
-                  {project}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="workspace-scroll">
+          <div className="workspace-column">
+            <header className="project-bar">
+              <div className="project-bar-group">
+                <input
+                  id="project-path"
+                  className="text-input"
+                  list="known-projects"
+                  value={projectDraft}
+                  onChange={(event) => setProjectDraft(event.target.value)}
+                  onBlur={handleProjectDraftCommit}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") {
+                      return;
+                    }
 
-          <div className="project-bar-group project-input-group">
-            <label className="field-label" htmlFor="project-path">
-              Open project
-            </label>
-            <input
-              id="project-path"
-              className="text-input"
-              list="known-projects"
-              value={projectDraft}
-              onChange={(event) => setProjectDraft(event.target.value)}
-              placeholder="/absolute/path/to/project"
-            />
-            <datalist id="known-projects">
-              {projectOptions.map((project) => (
-                <option key={project} value={project} />
-              ))}
-            </datalist>
-          </div>
-
-          <div className="project-actions">
-            <button type="button" className="button secondary" onClick={() => void handleTrackProject()}>
-              Track project
-            </button>
-            <button
-              type="button"
-              className="button primary"
-              onClick={() => void handleStartThread()}
-              disabled={backendStatus !== "ready" || isStartingThread}
-            >
-              {isStartingThread ? "Starting..." : "New thread"}
-            </button>
-          </div>
-        </header>
-
-        {backendStatus !== "ready" ? (
-          <section className="banner warning-banner">
-            <div>
-              <strong>Backend status:</strong> {backendStatus}
-              {lastExit ? ` (exit code ${String(lastExit.code)}, signal ${String(lastExit.signal)})` : ""}
-            </div>
-            <button type="button" className="button secondary" onClick={() => void handleRestartServer()}>
-              Restart app-server
-            </button>
-            {stderrTail.length > 0 ? (
-              <pre className="stderr-tail">{stderrTail.slice(-10).join("\n")}</pre>
-            ) : null}
-          </section>
-        ) : null}
-
-        {actionError ? <section className="banner error-banner">{actionError}</section> : null}
-        {selectedThreadError ? <section className="banner error-banner">{selectedThreadError}</section> : null}
-
-        {currentThread ? (
-          <>
-            <section className="thread-header">
-              <div className="thread-header-main">
-                <div className="thread-title-row">
-                  <input
-                    className="thread-title-input"
-                    value={renameDraft}
-                    onChange={(event) => setRenameDraft(event.target.value)}
-                    placeholder={currentThread.preview || currentThread.id}
-                  />
-                  <button type="button" className="button secondary" disabled={isRenaming} onClick={() => void handleRenameThread()}>
-                    {isRenaming ? "Saving..." : "Rename"}
-                  </button>
-                </div>
-
-                <div className="thread-meta-row">
-                  <span className={`badge ${isLive ? "badge-live" : "badge-replay"}`}>{isLive ? "Live attached" : "Replay only"}</span>
-                  <span className="badge">{formatThreadStatus(currentThread.status)}</span>
-                  <span className="badge">{formatSessionSource(currentThread.source)}</span>
-                  <span className="badge muted">{currentThread.cwd}</span>
-                </div>
+                    event.preventDefault();
+                    handleProjectDraftCommit();
+                  }}
+                  placeholder="/path/to/project"
+                />
+                <datalist id="known-projects">
+                  {projectOptions.map((project) => (
+                    <option key={project} value={project} />
+                  ))}
+                </datalist>
               </div>
+            </header>
 
-              <div className="thread-header-actions">
-                <button type="button" className="button secondary" onClick={() => void openThread(currentThread.id, "replay")}>
-                  Refresh replay
+            {backendStatus !== "ready" ? (
+              <section className="banner warning-banner">
+                <div>
+                  <strong>Backend status:</strong> {backendStatus}
+                  {lastExit ? ` (exit code ${String(lastExit.code)}, signal ${String(lastExit.signal)})` : ""}
+                </div>
+                <button type="button" className="button secondary" onClick={() => void handleRestartServer()}>
+                  Restart app-server
                 </button>
-                <button type="button" className="button primary" onClick={() => void openThread(currentThread.id, "live")} disabled={threadLoadingId === currentThread.id}>
-                  {isLive ? "Live attached" : threadLoadingId === currentThread.id ? "Attaching..." : "Resume live"}
-                </button>
-              </div>
-            </section>
-
-            {activeTurnId && !waitingOnUserAction ? (
-              <section className="banner info-banner">The active turn is running. New composer submits will steer the current turn.</section>
-            ) : null}
-            {waitingOnUserAction ? (
-              <section className="banner info-banner">Resolve the pending approval or tool input before sending more guidance.</section>
-            ) : null}
-            {isCurrentThreadNonSteerable ? (
-              <section className="banner info-banner">The active turn is not steerable. Wait for it to finish before sending another turn.</section>
+                {stderrTail.length > 0 ? (
+                  <pre className="stderr-tail">{stderrTail.slice(-10).join("\n")}</pre>
+                ) : null}
+              </section>
             ) : null}
 
-            <TranscriptView
-              threadId={currentThread.id}
-              respondingRequestKey={respondingRequestKey}
-              onRespond={handleRespondToRequest}
-            />
+            {actionError ? <section className="banner error-banner">{actionError}</section> : null}
+            {selectedThreadError ? <section className="banner error-banner">{selectedThreadError}</section> : null}
 
-            <section className="composer-shell">
-              <textarea
-                className="composer-input"
-                value={composerValue}
-                onChange={(event) => {
-                  if (!activeThreadId) {
-                    return;
-                  }
+            {currentThread ? (
+              <>
+                <section className="thread-header">
+                  <div className="thread-header-main">
+                    <div className="thread-title-row">
+                      {isEditingTitle ? (
+                        <input
+                          ref={titleInputRef}
+                          className="thread-title-input"
+                          value={renameDraft}
+                          onChange={(event) => setRenameDraft(event.target.value)}
+                          onBlur={() => void handleRenameThread()}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              void handleRenameThread();
+                            }
 
-                  setComposerDrafts((previous) => ({
-                    ...previous,
-                    [activeThreadId]: event.target.value,
-                  }));
-                }}
-                placeholder={isLive ? "Message Codex" : "Resume the thread live to continue the conversation"}
-                disabled={!currentThread || !isLive}
-              />
+                            if (event.key === "Escape") {
+                              event.preventDefault();
+                              handleCancelRenameThread();
+                            }
+                          }}
+                          placeholder={currentThread.preview || currentThread.id}
+                          disabled={isRenaming}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          className="thread-title-button"
+                          onClick={() => setIsEditingTitle(true)}
+                          title={renameDraft || currentThread.preview || currentThread.id}
+                        >
+                          {renameDraft || currentThread.preview || currentThread.id}
+                        </button>
+                      )}
+                    </div>
 
-              <div className="composer-actions">
-                <div className="composer-hint">
-                  {activeTurnId ? "Composer will call `turn/steer`." : "Composer will call `turn/start`."}
+                    <div className="thread-meta-row">
+                      <span className={`badge ${isLive ? "badge-live" : "badge-replay"}`}>{isLive ? "Live attached" : "Replay only"}</span>
+                      <span className="badge">{formatThreadStatus(currentThread.status)}</span>
+                      <span className="badge">{formatSessionSource(currentThread.source)}</span>
+                      <span className="badge muted">{currentThread.cwd}</span>
+                    </div>
+                  </div>
+
+                  <div className="thread-header-actions">
+                    <button type="button" className="button secondary" onClick={() => void openThread(currentThread.id, "replay")}>
+                      Refresh replay
+                    </button>
+                    <button type="button" className="button primary" onClick={() => void openThread(currentThread.id, "live")} disabled={threadLoadingId === currentThread.id}>
+                      {isLive ? "Live attached" : threadLoadingId === currentThread.id ? "Attaching..." : "Resume live"}
+                    </button>
+                  </div>
+                </section>
+
+                {activeTurnId && !waitingOnUserAction ? (
+                  <section className="banner info-banner">The active turn is running. New composer submits will steer the current turn.</section>
+                ) : null}
+                {waitingOnUserAction ? (
+                  <section className="banner info-banner">Resolve the pending approval or tool input before sending more guidance.</section>
+                ) : null}
+                {isCurrentThreadNonSteerable ? (
+                  <section className="banner info-banner">The active turn is not steerable. Wait for it to finish before sending another turn.</section>
+                ) : null}
+
+                <TranscriptView
+                  threadId={currentThread.id}
+                  respondingRequestKey={respondingRequestKey}
+                  onRespond={handleRespondToRequest}
+                />
+
+                <section className="composer-shell">
+                  <div className="composer-input-shell">
+                    <textarea
+                      ref={composerInputRef}
+                      className="composer-input"
+                      value={composerValue}
+                      onChange={(event) => {
+                        if (!activeThreadId) {
+                          return;
+                        }
+
+                        setComposerDrafts((previous) => ({
+                          ...previous,
+                          [activeThreadId]: event.target.value,
+                        }));
+                      }}
+                      placeholder={isLive ? "Message Codex" : "Resume the thread live to continue the conversation"}
+                      disabled={!currentThread || !isLive}
+                    />
+                    <button
+                      type="button"
+                      className="composer-submit-button"
+                      disabled={isStreaming ? !isLive : !canCompose || composerBusy || !composerValue.trim()}
+                      onClick={() => {
+                        if (isStreaming) {
+                          void handleInterruptTurn();
+                          return;
+                        }
+
+                        void handleSubmitComposer();
+                      }}
+                      title={isStreaming ? "Stop turn" : "Send"}
+                      aria-label={isStreaming ? "Stop turn" : "Send"}
+                    >
+                      {isStreaming ? "■" : "↑"}
+                    </button>
+                  </div>
+                  {composerControlDraft ? (
+                    <div className="composer-control-row" aria-label="Composer settings">
+                      <div className="composer-mode-toggle" role="group" aria-label="Mode">
+                        <button
+                          type="button"
+                          className={`composer-mode-button ${composerControlDraft.mode === "default" ? "active" : ""}`}
+                          onClick={() => handleSelectComposerMode("default")}
+                          disabled={composerControlsDisabled}
+                        >
+                          Build
+                        </button>
+                        <button
+                          type="button"
+                          className={`composer-mode-button ${composerControlDraft.mode === "plan" ? "active" : ""}`}
+                          onClick={() => handleSelectComposerMode("plan")}
+                          disabled={composerControlsDisabled}
+                        >
+                          Plan
+                        </button>
+                      </div>
+
+                      <div className="composer-select-shell composer-model-select-shell">
+                        <select
+                          className="select-input composer-control-select"
+                          value={composerControlDraft.model}
+                          onChange={(event) => handleSelectComposerModel(event.target.value)}
+                          disabled={composerControlsDisabled || modelChoices.length === 0}
+                          aria-label="Model"
+                        >
+                          {modelChoices.length === 0 ? (
+                            <option value="">{modelsLoading ? "Loading models..." : "No models available"}</option>
+                          ) : null}
+                          {modelChoices.map((model) => (
+                            <option key={model.model} value={model.model}>
+                              {model.displayName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="composer-select-shell composer-effort-select-shell">
+                        <select
+                          className="select-input composer-control-select"
+                          value={composerControlDraft.effort ?? ""}
+                          onChange={(event) => handleSelectComposerEffort(event.target.value as ReasoningEffort)}
+                          disabled={composerControlsDisabled || reasoningOptions.length === 0}
+                          aria-label="Reasoning effort"
+                        >
+                          {reasoningOptions.length === 0 ? (
+                            <option value="">{selectedModel ? "No reasoning options" : "Select a model"}</option>
+                          ) : null}
+                          {reasoningOptions.map((option) => (
+                            <option key={option.reasoningEffort} value={option.reasoningEffort}>
+                              {formatReasoningEffort(option.reasoningEffort)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <button
+                        type="button"
+                        className={`composer-permission-button ${composerControlDraft.fullAccess ? "active" : ""}`}
+                        onClick={handleToggleFullAccess}
+                        disabled={composerControlsDisabled}
+                        title={composerControlDraft.fullAccess ? "Permissions: full access" : "Permissions: standard access"}
+                        aria-label={composerControlDraft.fullAccess ? "Permissions: full access" : "Permissions: standard access"}
+                        aria-pressed={composerControlDraft.fullAccess}
+                      >
+                        <PermissionShieldIcon active={composerControlDraft.fullAccess} />
+                      </button>
+                    </div>
+                  ) : null}
+                </section>
+              </>
+            ) : (
+              <section className="empty-state">
+                <div className="empty-card">
+                  <p className="eyebrow">No session selected</p>
+                  <h2>Start a new thread or open a saved one.</h2>
                 </div>
-                <div className="composer-buttons">
-                  <button type="button" className="button secondary" disabled={!activeTurnId || !isLive} onClick={() => void handleInterruptTurn()}>
-                    Stop turn
-                  </button>
-                  <button type="button" className="button primary" disabled={!canCompose || composerBusy || !composerValue.trim()} onClick={() => void handleSubmitComposer()}>
-                    {composerBusy ? "Sending..." : activeTurnId ? "Steer turn" : "Send turn"}
-                  </button>
-                </div>
-              </div>
-            </section>
-          </>
-        ) : (
-          <section className="empty-state">
-            <div className="empty-card">
-              <p className="eyebrow">No session selected</p>
-              <h2>Start a new thread or open a saved one.</h2>
-              <p>
-                Sessions are loaded from `{initializeResponse?.codexHome ?? "~/.codex"}` and keyed by the real Codex thread id.
-              </p>
-            </div>
-          </section>
-        )}
+              </section>
+            )}
+          </div>
+        </div>
       </main>
     </div>
   );
@@ -685,38 +1075,31 @@ export default function App() {
 function SessionRow(props: {
   threadId: string;
   active: boolean;
-  loading: boolean;
-  onOpenReplay: () => void;
-  onOpenLive: () => void;
+  onOpen: () => void;
 }) {
-  const { threadId, active, loading, onOpenReplay, onOpenLive } = props;
+  const { threadId, active, onOpen } = props;
   const thread = useAppStore((state) => state.threadsById[threadId]);
-  const mode = useAppStore((state) => state.threadModes[threadId]);
 
   if (!thread) {
     return null;
   }
 
+  const isRunning = thread.status.type === "active";
+
   return (
-    <div className={`session-row ${active ? "active" : ""}`}>
-      <button type="button" className="session-main" onClick={onOpenReplay}>
-        <div className="session-main-head">
-          <span className="session-name">{thread.name?.trim() || thread.preview || thread.id}</span>
-          <span className="session-updated">{formatTimestamp(thread.updatedAt)}</span>
-        </div>
-        <div className="session-main-body">
-          <span className="session-path">{thread.cwd}</span>
-          <span className="session-id">{thread.id}</span>
-        </div>
-        <div className="session-main-foot">
-          <span className="badge muted">{formatThreadStatus(thread.status)}</span>
-          <span className="badge muted">{mode === "live" ? "live" : "replay"}</span>
-        </div>
-      </button>
-      <button type="button" className="session-live-button" onClick={onOpenLive} disabled={loading}>
-        {loading ? "..." : "Live"}
-      </button>
-    </div>
+    <button
+      type="button"
+      className={`session-row ${active ? "active" : ""}`}
+      onClick={onOpen}
+      title={thread.cwd}
+    >
+      <span className={`session-indicator ${isRunning ? "running" : "idle"}`} />
+      <div className="session-info">
+        <span className="session-name">{thread.name?.trim() || thread.preview || thread.id}</span>
+        <span className="session-meta">{thread.cwd.split("/").filter(Boolean).pop() ?? thread.cwd}</span>
+      </div>
+      <span className="session-time">{formatRelativeTime(thread.updatedAt)}</span>
+    </button>
   );
 }
 
@@ -843,11 +1226,15 @@ function TranscriptItemCard(props: {
     return null;
   }
 
+  const itemLabel = formatItemLabel(item.type);
+
   return (
     <div className={`item-card item-${item.type}`}>
-      <div className="item-header">
-        <span className="eyebrow">{formatItemType(item.type)}</span>
-      </div>
+      {itemLabel ? (
+        <div className="item-header">
+          <span className="eyebrow">{itemLabel}</span>
+        </div>
+      ) : null}
 
       <div className="item-body">{renderItemBody(item)}</div>
 
@@ -1298,15 +1685,38 @@ function formatSessionSource(source: unknown): string {
   return "unknown";
 }
 
-function formatTimestamp(timestampSeconds: number) {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(timestampSeconds * 1000));
+function formatRelativeTime(timestampSeconds: number) {
+  const now = Date.now();
+  const diff = now - timestampSeconds * 1000;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "now";
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d`;
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(
+    new Date(timestampSeconds * 1000),
+  );
 }
 
-function formatItemType(type: string) {
+function formatItemLabel(type: string) {
+  if (type === "userMessage" || type === "agentMessage") {
+    return "";
+  }
+
   return type.replace(/([A-Z])/g, " $1").toLowerCase();
+}
+
+function formatProjectTileLabel(project: string) {
+  const baseName = project.split("/").filter(Boolean).pop() ?? project;
+  const parts = baseName.split(/[^a-zA-Z0-9]+/).filter(Boolean);
+
+  if (parts.length >= 2) {
+    return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+  }
+
+  return baseName.slice(0, 2).toUpperCase();
 }
 
 function safeSocketEvent(raw: string): BrowserEvent | null {
