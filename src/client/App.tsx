@@ -7,6 +7,7 @@ import { useShallow } from "zustand/react/shallow";
 
 import {
   ApiError,
+  fetchEnvHome,
   fetchInit,
   interruptTurn,
   listAvailableModels,
@@ -164,6 +165,11 @@ export default function App() {
   const [respondingRequestKey, setRespondingRequestKey] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectionRestored, setSelectionRestored] = useState(false);
+  const [envHome, setEnvHome] = useState("");
+  const [showAddProjectModal, setShowAddProjectModal] = useState(false);
+  const [addProjectDraft, setAddProjectDraft] = useState("");
+  const [hiddenProjects, setHiddenProjects] = useState<string[]>([]);
+  const [showHiddenProjects, setShowHiddenProjects] = useState(false);
 
   const deferredSearchTerm = useDeferredValue(searchTerm.trim().toLowerCase());
 
@@ -215,6 +221,17 @@ export default function App() {
         if (!cancelled) {
           setActionError(getErrorMessage(error));
         }
+      }
+    })();
+
+    void (async () => {
+      try {
+        const home = await fetchEnvHome();
+        if (!cancelled) {
+          setEnvHome(home);
+        }
+      } catch {
+        // non-critical
       }
     })();
 
@@ -521,8 +538,54 @@ export default function App() {
     setCustomProjects((previous) => (previous.includes(nextProject) ? previous : [...previous, nextProject]));
   }
 
+  function handleAddProject() {
+    let resolved = addProjectDraft.trim();
+    if (!resolved) {
+      return;
+    }
+
+    if (resolved.startsWith("~") && envHome) {
+      resolved = envHome + resolved.slice(1);
+    }
+
+    setCurrentProject(resolved);
+    setProjectDraft(resolved);
+    setCustomProjects((previous) => (previous.includes(resolved) ? previous : [...previous, resolved]));
+    setAddProjectDraft("");
+    setShowAddProjectModal(false);
+  }
+
+  function handleRemoveProject(project: string) {
+    setCustomProjects((previous) => previous.filter((p) => p !== project));
+    if (currentProject === project) {
+      const remaining = projectOptions.filter((p) => p !== project);
+      setCurrentProject(remaining[0] ?? "");
+      setProjectDraft(remaining[0] ?? "");
+    }
+  }
+
+  function handleHideProject(project: string) {
+    setHiddenProjects((previous) => (previous.includes(project) ? previous : [...previous, project]));
+    if (currentProject === project) {
+      const remaining = projectOptions.filter((p) => p !== project && !hiddenProjects.includes(p));
+      setCurrentProject(remaining[0] ?? "");
+      setProjectDraft(remaining[0] ?? "");
+    }
+  }
+
+  function handleUnhideProject(project: string) {
+    setHiddenProjects((previous) => previous.filter((p) => p !== project));
+  }
+
+  const visibleProjects = projectOptions.filter((p) => !hiddenProjects.includes(p));
+  const overflowProjects = projectOptions.filter((p) => hiddenProjects.includes(p));
+
+  function projectHasSessions(project: string): boolean {
+    return threadOrder.some((tid) => threadsById[tid]?.cwd === project);
+  }
+
   async function handleStartThread() {
-    const cwd = projectDraft.trim() || currentProject.trim();
+    const cwd = currentProject.trim();
     if (!cwd) {
       setActionError("Choose a project path before starting a thread.");
       return;
@@ -600,11 +663,7 @@ export default function App() {
       return;
     }
 
-    const permissionBaseline = resolvePermissionBaseline(
-      currentThread.cwd,
-      threadPermissionBaselines[activeThreadId],
-      currentThreadSessionConfig,
-    );
+    const permissionBaseline = resolvePermissionBaseline(threadPermissionBaselines[activeThreadId], currentThreadSessionConfig);
     const nextThreadSessionConfig = buildThreadSessionConfig(
       currentThread.cwd,
       composerControlDraft,
@@ -763,20 +822,84 @@ export default function App() {
             <img src={codexLogoUrl} alt="" className="project-rail-brand-logo" />
           </div>
           <div className="project-rail-list">
-            {projectOptions.map((project) => (
-              <button
-                key={project}
-                type="button"
-                className={`project-tile ${project === currentProject ? "active" : ""}`}
-                onClick={() => {
-                  setCurrentProject(project);
-                  setProjectDraft(project);
-                }}
-                title={project}
-              >
-                {formatProjectTileLabel(project)}
-              </button>
+            {visibleProjects.map((project) => (
+              <div key={project} className="project-tile-wrapper">
+                <button
+                  type="button"
+                  className={`project-tile ${project === currentProject ? "active" : ""}`}
+                  onClick={() => {
+                    setCurrentProject(project);
+                    setProjectDraft(project);
+                  }}
+                  title={project}
+                >
+                  {formatProjectTileLabel(project)}
+                </button>
+                {project === currentProject ? (
+                  <div className="project-tile-actions">
+                    {!projectHasSessions(project) ? (
+                      <button
+                        type="button"
+                        className="project-tile-action"
+                        onClick={(e) => { e.stopPropagation(); handleRemoveProject(project); }}
+                        title="Delete project"
+                      >
+                        &times;
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="project-tile-action"
+                        onClick={(e) => { e.stopPropagation(); handleHideProject(project); }}
+                        title="Hide project"
+                      >
+                        &#x2212;
+                      </button>
+                    )}
+                  </div>
+                ) : null}
+              </div>
             ))}
+            {overflowProjects.length > 0 ? (
+              <div className="project-tile-wrapper">
+                <button
+                  type="button"
+                  className={`project-tile ${showHiddenProjects ? "active" : ""}`}
+                  onClick={() => setShowHiddenProjects((v) => !v)}
+                  title="Show hidden projects"
+                >
+                  &#x2026;
+                </button>
+                {showHiddenProjects ? (
+                  <div className="project-overflow-menu">
+                    {overflowProjects.map((project) => (
+                      <button
+                        key={project}
+                        type="button"
+                        className="project-overflow-item"
+                        onClick={() => {
+                          handleUnhideProject(project);
+                          setCurrentProject(project);
+                          setProjectDraft(project);
+                          setShowHiddenProjects(false);
+                        }}
+                        title={project}
+                      >
+                        {formatProjectTileLabel(project)} <span className="project-overflow-path">{project.split("/").filter(Boolean).pop()}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            <button
+              type="button"
+              className="project-tile project-tile-add"
+              onClick={() => setShowAddProjectModal(true)}
+              title="Add project"
+            >
+              +
+            </button>
           </div>
         </div>
 
@@ -827,35 +950,6 @@ export default function App() {
       </aside>
 
       <main className="workspace">
-        <div className="workspace-scroll">
-          <div className="workspace-column">
-            <header className="project-bar">
-              <div className="project-bar-group">
-                <input
-                  id="project-path"
-                  className="text-input"
-                  list="known-projects"
-                  value={projectDraft}
-                  onChange={(event) => setProjectDraft(event.target.value)}
-                  onBlur={handleProjectDraftCommit}
-                  onKeyDown={(event) => {
-                    if (event.key !== "Enter") {
-                      return;
-                    }
-
-                    event.preventDefault();
-                    handleProjectDraftCommit();
-                  }}
-                  placeholder="/path/to/project"
-                />
-                <datalist id="known-projects">
-                  {projectOptions.map((project) => (
-                    <option key={project} value={project} />
-                  ))}
-                </datalist>
-              </div>
-            </header>
-
             {backendStatus !== "ready" ? (
               <section className="banner warning-banner">
                 <div>
@@ -879,6 +973,7 @@ export default function App() {
                 <section className="thread-header">
                   <div className="thread-header-main">
                     <div className="thread-title-row">
+                      <span className={`thread-status-dot ${currentThread.status.type === "active" ? "running" : "idle"}`} />
                       {isEditingTitle ? (
                         <input
                           ref={titleInputRef}
@@ -914,9 +1009,7 @@ export default function App() {
 
                     <div className="thread-meta-row">
                       <span className={`badge ${isLive ? "badge-live" : "badge-replay"}`}>{isLive ? "Live attached" : "Replay only"}</span>
-                      <span className="badge">{formatThreadStatus(currentThread.status)}</span>
                       <span className="badge">{formatSessionSource(currentThread.source)}</span>
-                      <span className="badge muted">{currentThread.cwd}</span>
                     </div>
                   </div>
 
@@ -940,121 +1033,131 @@ export default function App() {
                   <section className="banner info-banner">The active turn is not steerable. Wait for it to finish before sending another turn.</section>
                 ) : null}
 
-                <TranscriptView
-                  threadId={currentThread.id}
-                  respondingRequestKey={respondingRequestKey}
-                  onRespond={handleRespondToRequest}
-                />
+                <div className="workspace-scroll">
+                  <div className="workspace-column">
+                    <TranscriptView
+                      threadId={currentThread.id}
+                      respondingRequestKey={respondingRequestKey}
+                      onRespond={handleRespondToRequest}
+                    />
+                  </div>
+                </div>
 
                 <section className="composer-shell">
-                  <div className="composer-input-shell">
-                    <textarea
-                      ref={composerInputRef}
-                      className="composer-input"
-                      value={composerValue}
-                      onChange={(event) => {
-                        if (!activeThreadId) {
-                          return;
-                        }
+                  <div className="workspace-column">
+                    <div className="composer-input-shell">
+                      <textarea
+                        ref={composerInputRef}
+                        className="composer-input"
+                        value={composerValue}
+                        onChange={(event) => {
+                          if (!activeThreadId) {
+                            return;
+                          }
 
-                        setComposerDrafts((previous) => ({
-                          ...previous,
-                          [activeThreadId]: event.target.value,
-                        }));
-                      }}
-                      placeholder={isLive ? "Message Codex" : "Resume the thread live to continue the conversation"}
-                      disabled={!currentThread || !isLive}
-                    />
-                    <button
-                      type="button"
-                      className="composer-submit-button"
-                      disabled={isStreaming ? !isLive : !canCompose || composerBusy || !composerValue.trim()}
-                      onClick={() => {
-                        if (isStreaming) {
-                          void handleInterruptTurn();
-                          return;
-                        }
-
-                        void handleSubmitComposer();
-                      }}
-                      title={isStreaming ? "Stop turn" : "Send"}
-                      aria-label={isStreaming ? "Stop turn" : "Send"}
-                    >
-                      {isStreaming ? "■" : "↑"}
-                    </button>
-                  </div>
-                  {composerControlDraft ? (
-                    <div className="composer-control-row" aria-label="Composer settings">
-                      <div className="composer-mode-toggle" role="group" aria-label="Mode">
-                        <button
-                          type="button"
-                          className={`composer-mode-button ${composerControlDraft.mode === "default" ? "active" : ""}`}
-                          onClick={() => handleSelectComposerMode("default")}
-                          disabled={composerControlsDisabled}
-                        >
-                          Build
-                        </button>
-                        <button
-                          type="button"
-                          className={`composer-mode-button ${composerControlDraft.mode === "plan" ? "active" : ""}`}
-                          onClick={() => handleSelectComposerMode("plan")}
-                          disabled={composerControlsDisabled}
-                        >
-                          Plan
-                        </button>
-                      </div>
-
-                      <div className="composer-select-shell composer-model-select-shell">
-                        <select
-                          className="select-input composer-control-select"
-                          value={composerControlDraft.model}
-                          onChange={(event) => handleSelectComposerModel(event.target.value)}
-                          disabled={composerControlsDisabled || modelChoices.length === 0}
-                          aria-label="Model"
-                        >
-                          {modelChoices.length === 0 ? (
-                            <option value="">{modelsLoading ? "Loading models..." : "No models available"}</option>
-                          ) : null}
-                          {modelChoices.map((model) => (
-                            <option key={model.model} value={model.model}>
-                              {model.displayName}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="composer-select-shell composer-effort-select-shell">
-                        <select
-                          className="select-input composer-control-select"
-                          value={composerControlDraft.effort ?? ""}
-                          onChange={(event) => handleSelectComposerEffort(event.target.value as ReasoningEffort)}
-                          disabled={composerControlsDisabled || reasoningOptions.length === 0}
-                          aria-label="Reasoning effort"
-                        >
-                          {reasoningOptions.length === 0 ? (
-                            <option value="">{selectedModel ? "No reasoning options" : "Select a model"}</option>
-                          ) : null}
-                          {reasoningOptions.map((option) => (
-                            <option key={option.reasoningEffort} value={option.reasoningEffort}>
-                              {formatReasoningEffort(option.reasoningEffort)}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
+                          setComposerDrafts((previous) => ({
+                            ...previous,
+                            [activeThreadId]: event.target.value,
+                          }));
+                        }}
+                        placeholder={isLive ? "Message Codex" : "Resume the thread live to continue the conversation"}
+                        disabled={!currentThread || !isLive}
+                      />
                       <button
                         type="button"
-                        className={`composer-permission-button ${composerControlDraft.fullAccess ? "active" : ""}`}
-                        onClick={handleToggleFullAccess}
-                        disabled={composerControlsDisabled}
-                        title={composerControlDraft.fullAccess ? "Permissions: full access" : "Permissions: standard access"}
-                        aria-label={composerControlDraft.fullAccess ? "Permissions: full access" : "Permissions: standard access"}
-                        aria-pressed={composerControlDraft.fullAccess}
+                        className="composer-submit-button"
+                        disabled={isStreaming ? !isLive : !canCompose || composerBusy || !composerValue.trim()}
+                        onClick={() => {
+                          if (isStreaming) {
+                            void handleInterruptTurn();
+                            return;
+                          }
+
+                          void handleSubmitComposer();
+                        }}
+                        title={isStreaming ? "Stop turn" : "Send"}
+                        aria-label={isStreaming ? "Stop turn" : "Send"}
                       >
-                        <PermissionShieldIcon active={composerControlDraft.fullAccess} />
+                        {isStreaming ? (
+                          <svg fill="none" viewBox="0 0 20 20" width="16" height="16"><rect x="5" y="5" width="10" height="10" fill="currentColor"/></svg>
+                        ) : (
+                          <svg fill="none" viewBox="0 0 20 20" width="16" height="16"><path fillRule="evenodd" clipRule="evenodd" d="M9.99991 2.24121L16.0921 8.33343L15.2083 9.21731L10.6249 4.63397V17.5001H9.37492V4.63398L4.7916 9.21731L3.90771 8.33343L9.99991 2.24121Z" fill="currentColor"/></svg>
+                        )}
                       </button>
                     </div>
-                  ) : null}
+                    {composerControlDraft ? (
+                      <div className="composer-control-row" aria-label="Composer settings">
+                        <div className="composer-mode-toggle" role="group" aria-label="Mode">
+                          <button
+                            type="button"
+                            className={`composer-mode-button ${composerControlDraft.mode === "default" ? "active" : ""}`}
+                            onClick={() => handleSelectComposerMode("default")}
+                            disabled={composerControlsDisabled}
+                          >
+                            Build
+                          </button>
+                          <button
+                            type="button"
+                            className={`composer-mode-button ${composerControlDraft.mode === "plan" ? "active" : ""}`}
+                            onClick={() => handleSelectComposerMode("plan")}
+                            disabled={composerControlsDisabled}
+                          >
+                            Plan
+                          </button>
+                        </div>
+
+                        <div className="composer-select-shell composer-model-select-shell">
+                          <select
+                            className="select-input composer-control-select"
+                            value={composerControlDraft.model}
+                            onChange={(event) => handleSelectComposerModel(event.target.value)}
+                            disabled={composerControlsDisabled || modelChoices.length === 0}
+                            aria-label="Model"
+                          >
+                            {modelChoices.length === 0 ? (
+                              <option value="">{modelsLoading ? "Loading models..." : "No models available"}</option>
+                            ) : null}
+                            {modelChoices.map((model) => (
+                              <option key={model.model} value={model.model}>
+                                {model.displayName}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="composer-select-shell composer-effort-select-shell">
+                          <select
+                            className="select-input composer-control-select"
+                            value={composerControlDraft.effort ?? ""}
+                            onChange={(event) => handleSelectComposerEffort(event.target.value as ReasoningEffort)}
+                            disabled={composerControlsDisabled || reasoningOptions.length === 0}
+                            aria-label="Reasoning effort"
+                          >
+                            {reasoningOptions.length === 0 ? (
+                              <option value="">{selectedModel ? "No reasoning options" : "Select a model"}</option>
+                            ) : null}
+                            {reasoningOptions.map((option) => (
+                              <option key={option.reasoningEffort} value={option.reasoningEffort}>
+                                {formatReasoningEffort(option.reasoningEffort)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <button
+                          type="button"
+                          className={`composer-permission-button ${composerControlDraft.fullAccess ? "active" : ""}`}
+                          onClick={handleToggleFullAccess}
+                          disabled={composerControlsDisabled}
+                          title={composerControlDraft.fullAccess ? "Permissions: full access" : "Permissions: standard access"}
+                          aria-label={composerControlDraft.fullAccess ? "Permissions: full access" : "Permissions: standard access"}
+                          aria-pressed={composerControlDraft.fullAccess}
+                        >
+                          <PermissionShieldIcon active={composerControlDraft.fullAccess} />
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                 </section>
               </>
             ) : (
@@ -1065,9 +1168,30 @@ export default function App() {
                 </div>
               </section>
             )}
+      </main>
+
+      {showAddProjectModal ? (
+        <div className="modal-backdrop" onClick={() => setShowAddProjectModal(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <h3 className="modal-title">Add project</h3>
+            <input
+              className="text-input"
+              autoFocus
+              value={addProjectDraft}
+              onChange={(e) => setAddProjectDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); handleAddProject(); }
+                if (e.key === "Escape") { e.preventDefault(); setShowAddProjectModal(false); }
+              }}
+              placeholder="/path/to/project or ~/project"
+            />
+            <div className="modal-actions">
+              <button type="button" className="button primary" onClick={handleAddProject} disabled={!addProjectDraft.trim()}>Add</button>
+              <button type="button" className="button secondary" onClick={() => setShowAddProjectModal(false)}>Cancel</button>
+            </div>
           </div>
         </div>
-      </main>
+      ) : null}
     </div>
   );
 }
@@ -1096,9 +1220,8 @@ function SessionRow(props: {
       <span className={`session-indicator ${isRunning ? "running" : "idle"}`} />
       <div className="session-info">
         <span className="session-name">{thread.name?.trim() || thread.preview || thread.id}</span>
-        <span className="session-meta">{thread.cwd.split("/").filter(Boolean).pop() ?? thread.cwd}</span>
+        <span className="session-meta">{formatRelativeTime(thread.updatedAt)}</span>
       </div>
-      <span className="session-time">{formatRelativeTime(thread.updatedAt)}</span>
     </button>
   );
 }
@@ -1603,6 +1726,143 @@ function MarkdownBlock(props: { text: string }) {
       </ReactMarkdown>
     </div>
   );
+}
+
+function PermissionShieldIcon(props: { active: boolean }) {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="composer-permission-icon">
+      <path
+        d="M8 1.5 13 3.4v3.7c0 3-2 5.7-5 7.4-3-1.7-5-4.4-5-7.4V3.4L8 1.5Z"
+        fill={props.active ? "currentColor" : "none"}
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <path d="M5.8 7.8 7.3 9.3 10.4 6.2" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function extractThreadSessionConfig(response: ThreadResponse | ThreadSessionResponse): ThreadSessionConfig | null {
+  if (!("approvalPolicy" in response) || !("cwd" in response) || !("model" in response) || !("sandbox" in response)) {
+    return null;
+  }
+
+  return {
+    cwd: response.cwd,
+    model: response.model,
+    reasoningEffort: response.reasoningEffort,
+    approvalPolicy: response.approvalPolicy,
+    sandbox: response.sandbox,
+  };
+}
+
+function createComposerControlDraft(
+  sessionConfig: ThreadSessionConfig | null,
+  models: ModelOption[],
+): ComposerControlDraft | null {
+  const fallbackModel = sessionConfig?.model ?? models.find((model) => model.isDefault)?.model ?? models[0]?.model;
+  if (!fallbackModel) {
+    return null;
+  }
+
+  const modelOption = findModelOption(models, fallbackModel);
+  return {
+    mode: "default",
+    model: fallbackModel,
+    effort: normalizeReasoningEffort(modelOption, sessionConfig?.reasoningEffort ?? null),
+    fullAccess: isDangerFullAccess(sessionConfig?.sandbox),
+  };
+}
+
+function listModelChoices(models: ModelOption[], selectedModel: string): ModelChoice[] {
+  if (models.some((model) => model.model === selectedModel)) {
+    return models.map((model) => ({
+      displayName: model.displayName,
+      model: model.model,
+    }));
+  }
+
+  return [
+    {
+      displayName: selectedModel,
+      model: selectedModel,
+    },
+    ...models.map((model) => ({
+      displayName: model.displayName,
+      model: model.model,
+    })),
+  ];
+}
+
+function findModelOption(models: ModelOption[], model: string | null | undefined): ModelOption | null {
+  if (!model) {
+    return null;
+  }
+
+  return models.find((entry) => entry.model === model) ?? null;
+}
+
+function normalizeReasoningEffort(model: ModelOption | null, effort: ReasoningEffort | null): ReasoningEffort | null {
+  if (!model) {
+    return effort;
+  }
+
+  if (effort && model.supportedReasoningEfforts.some((option) => option.reasoningEffort === effort)) {
+    return effort;
+  }
+
+  return model.defaultReasoningEffort;
+}
+
+function resolvePermissionBaseline(baseline: PermissionBaseline | undefined, sessionConfig: ThreadSessionConfig | null): PermissionBaseline {
+  if (baseline) {
+    return baseline;
+  }
+
+  if (sessionConfig && !isDangerFullAccess(sessionConfig.sandbox)) {
+    return {
+      approvalPolicy: sessionConfig.approvalPolicy,
+      sandbox: sessionConfig.sandbox,
+    };
+  }
+
+  return {
+    approvalPolicy: "on-request",
+    sandbox: {
+      type: "workspaceWrite",
+      writableRoots: [],
+      readOnlyAccess: {
+        type: "fullAccess",
+      },
+      networkAccess: false,
+      excludeTmpdirEnvVar: false,
+      excludeSlashTmp: false,
+    },
+  };
+}
+
+function buildThreadSessionConfig(
+  cwd: string,
+  controls: ComposerControlDraft,
+  permissionBaseline: PermissionBaseline,
+  model: ModelOption | null,
+): ThreadSessionConfig {
+  return {
+    cwd,
+    model: controls.model,
+    reasoningEffort: normalizeReasoningEffort(model, controls.effort),
+    approvalPolicy: controls.fullAccess ? "never" : permissionBaseline.approvalPolicy,
+    sandbox: controls.fullAccess ? { type: "dangerFullAccess" } : permissionBaseline.sandbox,
+  };
+}
+
+function isDangerFullAccess(sandbox: SandboxPolicy | null | undefined): boolean {
+  return sandbox?.type === "dangerFullAccess";
+}
+
+function formatReasoningEffort(effort: ReasoningEffort): string {
+  return effort === "xhigh" ? "X-High" : effort[0].toUpperCase() + effort.slice(1);
 }
 
 function normalizeStringArray(value: unknown): string[] {

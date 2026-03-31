@@ -510,12 +510,7 @@ button {
   text-overflow: ellipsis;
 }
 
-.session-time {
-  font-size: 12px;
-  color: var(--text-weaker);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
+/* session-time removed — time now shown in session-meta */
 
 /* ── Workspace ─────────────────────────────────── */
 .workspace {
@@ -538,37 +533,20 @@ button {
   display: flex;
   flex-direction: column;
   width: min(100%, 760px);
-  min-height: 100%;
   margin: 0 auto;
 }
 
-/* ── Project bar (compact inline) ─────────────── */
-.project-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 16px 0 12px;
-  background: var(--bg-base);
-  border-bottom: 1px solid var(--border-weak);
-  flex-wrap: wrap;
-}
-
-.project-bar-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1;
-  min-width: 0;
-}
+/* project-bar removed — project input moved to sidebar modal */
 
 /* ── Thread header ─────────────────────────────── */
 .thread-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 12px 24px;
   background: var(--bg-base);
   border-bottom: 1px solid var(--border-weak);
+  flex-shrink: 0;
 }
 
 .thread-header-main {
@@ -613,6 +591,19 @@ button {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.thread-status-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--text-weaker);
+}
+
+.thread-status-dot.running {
+  background: var(--color-brand);
+  animation: session-pulse 1.2s ease-in-out infinite;
 }
 
 .thread-title-input:focus {
@@ -1057,13 +1048,73 @@ button {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 0 24px;
+  padding: 12px 24px 12px;
   background: var(--bg-base);
   border-top: 1px solid var(--border-weak);
+  flex-shrink: 0;
 }
 
 .composer-input-shell {
   position: relative;
+}
+
+.composer-control-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.composer-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border-weak);
+  border-radius: 999px;
+  background: var(--surface-subtle);
+}
+
+.composer-mode-button {
+  min-width: 72px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-weak);
+  padding: 6px 12px;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  line-height: 1.2;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.composer-mode-button:hover:not(:disabled) {
+  color: var(--text-strong);
+}
+
+.composer-mode-button.active {
+  background: var(--surface-raised);
+  color: var(--text-strong);
+  box-shadow: var(--shadow-border);
+}
+
+.composer-select-shell {
+  min-width: 0;
+}
+
+.composer-model-select-shell {
+  flex: 1 1 240px;
+  min-width: 180px;
+}
+
+.composer-effort-select-shell {
+  flex: 0 1 160px;
+}
+
+.composer-control-select {
+  height: 36px;
+  padding-right: 32px;
+  font-size: var(--font-size-sm);
 }
 
 .composer-actions {
@@ -1107,6 +1158,43 @@ button {
 .composer-submit-button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.composer-permission-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border-weak);
+  border-radius: 12px;
+  background: var(--surface-base);
+  color: var(--text-weak);
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.composer-permission-button:hover:not(:disabled) {
+  color: var(--text-strong);
+  border-color: var(--border-strong);
+}
+
+.composer-permission-button.active {
+  background: rgba(3, 76, 255, 0.08);
+  color: var(--text-interactive);
+  border-color: rgba(3, 76, 255, 0.32);
+}
+
+.composer-permission-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.composer-permission-icon {
+  width: 16px;
+  height: 16px;
 }
 
 /* ── Banners ───────────────────────────────────── */
@@ -1211,7 +1299,8 @@ button {
   .thread-title-row,
   .thread-header,
   .approval-actions,
-  .composer-actions {
+  .composer-actions,
+  .composer-control-row {
     flex-direction: column;
     align-items: stretch;
   }
@@ -1227,5 +1316,18 @@ button {
 
   .workspace-scroll {
     padding: 0 16px;
+  }
+
+  .composer-mode-toggle {
+    width: 100%;
+  }
+
+  .composer-mode-button {
+    flex: 1 1 0;
+  }
+
+  .composer-model-select-shell,
+  .composer-effort-select-shell {
+    width: 100%;
   }
 }
