@@ -1,6 +1,18 @@
 import { create } from "zustand";
 
-import { isRecord, serializeRequestId, type AppServerExit, type AppServerStatus, type BackendSnapshot, type BrowserServerRequest, type InitializeResponse, type Thread, type ThreadItem, type Turn } from "../shared/codex.js";
+import {
+  isRecord,
+  serializeRequestId,
+  type AppServerExit,
+  type AppServerStatus,
+  type BackendSnapshot,
+  type BrowserServerRequest,
+  type InitializeResponse,
+  type Thread,
+  type ThreadItem,
+  type ThreadSessionConfig,
+  type Turn,
+} from "../shared/codex.js";
 
 export type ThreadMode = "replay" | "live";
 
@@ -10,6 +22,7 @@ type AppStore = {
   stderrTail: string[];
   lastExit: AppServerExit;
   threadsById: Record<string, Thread>;
+  threadSessionConfigById: Record<string, ThreadSessionConfig>;
   threadOrder: string[];
   turnsById: Record<string, Turn>;
   turnOrderByThreadId: Record<string, string[]>;
@@ -24,9 +37,10 @@ type AppStore = {
   nonSteerableThreadIds: Record<string, boolean>;
   setSnapshot: (snapshot: BackendSnapshot) => void;
   replaceThreads: (threads: Thread[]) => void;
-  hydrateThread: (thread: Thread, mode: ThreadMode) => void;
+  hydrateThread: (thread: Thread, mode: ThreadMode, sessionConfig?: ThreadSessionConfig | null) => void;
   setActiveThread: (threadId: string | null) => void;
   setSelectedThreadError: (message: string | null) => void;
+  setThreadSessionConfig: (threadId: string, sessionConfig: ThreadSessionConfig) => void;
   updateThreadName: (threadId: string, name: string | null) => void;
   noteTurn: (threadId: string, turn: Turn) => void;
   applyNotification: (method: string, params: unknown) => void;
@@ -40,6 +54,7 @@ export const useAppStore = create<AppStore>((set) => ({
   stderrTail: [],
   lastExit: null,
   threadsById: {},
+  threadSessionConfigById: {},
   threadOrder: [],
   turnsById: {},
   turnOrderByThreadId: {},
@@ -79,12 +94,13 @@ export const useAppStore = create<AppStore>((set) => ({
     });
   },
 
-  hydrateThread: (thread, mode) => {
+  hydrateThread: (thread, mode, sessionConfig) => {
     set((state) => {
       const threadsById = {
         ...state.threadsById,
         [thread.id]: mergeThread(state.threadsById[thread.id], thread),
       };
+      const threadSessionConfigById = { ...state.threadSessionConfigById };
       const turnsById = { ...state.turnsById };
       const turnOrderByThreadId = { ...state.turnOrderByThreadId };
       const itemsById = { ...state.itemsById };
@@ -117,8 +133,13 @@ export const useAppStore = create<AppStore>((set) => ({
         delete liveAttachedThreadIds[thread.id];
       }
 
+      if (sessionConfig) {
+        threadSessionConfigById[thread.id] = sessionConfig;
+      }
+
       return {
         threadsById,
+        threadSessionConfigById,
         threadOrder: sortThreadOrder(threadsById),
         turnsById,
         turnOrderByThreadId,
@@ -142,6 +163,15 @@ export const useAppStore = create<AppStore>((set) => ({
   setSelectedThreadError: (message) => {
     set(() => ({
       selectedThreadError: message,
+    }));
+  },
+
+  setThreadSessionConfig: (threadId, sessionConfig) => {
+    set((state) => ({
+      threadSessionConfigById: {
+        ...state.threadSessionConfigById,
+        [threadId]: sessionConfig,
+      },
     }));
   },
 

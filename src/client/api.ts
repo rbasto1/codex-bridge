@@ -1,4 +1,16 @@
-import { isRecord, type BackendSnapshot, type RequestId, type RpcError, type Thread, type Turn } from "../shared/codex.js";
+import {
+  isRecord,
+  type ApprovalPolicy,
+  type BackendSnapshot,
+  type CollaborationModeKind,
+  type ReasoningEffort,
+  type RequestId,
+  type RpcError,
+  type SandboxPolicy,
+  type Thread,
+  type ThreadSessionConfig,
+  type Turn,
+} from "../shared/codex.js";
 
 export type ThreadListResponse = {
   data: Thread[];
@@ -9,8 +21,14 @@ export type ThreadResponse = {
   thread: Thread;
 };
 
-export type ThreadStartResponse = ThreadResponse;
-export type ThreadResumeResponse = ThreadResponse;
+export type ThreadSessionResponse = ThreadResponse & ThreadSessionConfig & {
+  approvalsReviewer: string;
+  modelProvider: string;
+  serviceTier: string | null;
+};
+
+export type ThreadStartResponse = ThreadSessionResponse;
+export type ThreadResumeResponse = ThreadSessionResponse;
 
 export type TurnStartResponse = {
   turn: Turn;
@@ -18,6 +36,40 @@ export type TurnStartResponse = {
 
 export type TurnSteerResponse = {
   turnId: string;
+};
+
+export type TurnStartOptions = {
+  approvalPolicy?: ApprovalPolicy | null;
+  sandboxPolicy?: SandboxPolicy | null;
+  collaborationMode?: {
+    mode: CollaborationModeKind;
+    settings: {
+      model: string;
+      reasoning_effort: ReasoningEffort | null;
+      developer_instructions: string | null;
+    };
+  } | null;
+};
+
+export type ModelReasoningEffortOption = {
+  description: string;
+  reasoningEffort: ReasoningEffort;
+};
+
+export type ModelOption = {
+  id: string;
+  model: string;
+  displayName: string;
+  description: string;
+  hidden: boolean;
+  isDefault: boolean;
+  defaultReasoningEffort: ReasoningEffort;
+  supportedReasoningEfforts: ModelReasoningEffortOption[];
+};
+
+type ModelListResponse = {
+  data: ModelOption[];
+  nextCursor: string | null;
 };
 
 export class ApiError extends Error {
@@ -28,6 +80,11 @@ export class ApiError extends Error {
 
 export async function fetchInit(): Promise<BackendSnapshot> {
   return requestJson<BackendSnapshot>("/api/init");
+}
+
+export async function fetchEnvHome(): Promise<string> {
+  const result = await requestJson<{ home: string }>("/api/env/home");
+  return result.home;
 }
 
 export async function restartServer(): Promise<BackendSnapshot> {
@@ -55,6 +112,27 @@ export async function listAllThreads(): Promise<Thread[]> {
   } while (cursor);
 
   return threads;
+}
+
+export async function listAvailableModels(): Promise<ModelOption[]> {
+  const models: ModelOption[] = [];
+  let cursor: string | null = null;
+
+  do {
+    const page = await requestJson<ModelListResponse>("/api/model/list", {
+      method: "POST",
+      body: JSON.stringify({
+        cursor,
+        limit: 200,
+        includeHidden: false,
+      }),
+    });
+
+    models.push(...page.data);
+    cursor = page.nextCursor;
+  } while (cursor);
+
+  return models;
 }
 
 export async function readThread(threadId: string): Promise<ThreadResponse> {
@@ -85,6 +163,13 @@ export async function startThread(cwd: string): Promise<ThreadStartResponse> {
   });
 }
 
+export async function generateThreadName(threadId: string, userMessage: string): Promise<{ name: string }> {
+  return requestJson<{ name: string }>("/api/thread/name/generate", {
+    method: "POST",
+    body: JSON.stringify({ threadId, userMessage }),
+  });
+}
+
 export async function renameThread(threadId: string, name: string): Promise<void> {
   await requestJson("/api/thread/name/set", {
     method: "POST",
@@ -95,12 +180,17 @@ export async function renameThread(threadId: string, name: string): Promise<void
   });
 }
 
-export async function startTurn(threadId: string, input: unknown): Promise<TurnStartResponse> {
+export async function startTurn(
+  threadId: string,
+  input: unknown,
+  options: TurnStartOptions = {},
+): Promise<TurnStartResponse> {
   return requestJson<TurnStartResponse>("/api/turn/start", {
     method: "POST",
     body: JSON.stringify({
       threadId,
       input,
+      ...options,
     }),
   });
 }

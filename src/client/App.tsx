@@ -13,6 +13,7 @@ import {
   listAvailableModels,
   listAllThreads,
   readThread,
+  generateThreadName,
   renameThread,
   respondToServerRequest,
   restartServer,
@@ -695,6 +696,18 @@ export default function App() {
           markNonSteerable(activeThreadId, false);
           setThreadSessionConfig(activeThreadId, nextThreadSessionConfig);
         });
+
+        // Auto-generate session name on first turn (fire-and-forget).
+        if (!currentThread.name) {
+          generateThreadName(activeThreadId, text).then(
+            (result) => {
+              if (result.name) {
+                updateThreadName(activeThreadId, result.name);
+              }
+            },
+            () => {/* silent — name generation is best-effort */},
+          );
+        }
       }
 
       setComposerDrafts((previous) => ({
@@ -1633,37 +1646,47 @@ function renderItemBody(item: ThreadItem) {
       return <div className="markdown-shell"><p>{renderUserInputs(item.content)}</p></div>;
     case "agentMessage":
       return <MarkdownBlock text={asString(item.text)} />;
-    case "reasoning":
+    case "reasoning": {
+      const summaryLines = normalizeStringArray(item.summary);
+      const contentLines = normalizeStringArray(item.content);
+      const firstLine = summaryLines[0] || contentLines[0] || "";
+      const hasMore = summaryLines.length > 1 || contentLines.length > 0;
       return (
         <div className="reasoning-block">
-          {normalizeStringArray(item.summary).length > 0 ? (
-            <ul className="reasoning-summary">
-              {normalizeStringArray(item.summary).map((entry, index) => (
-                <li key={`${item.id}-summary-${entry}`}>{entry}</li>
-              ))}
-            </ul>
-          ) : null}
-          {normalizeStringArray(item.content).length > 0 ? (
-            <details>
-              <summary>Detailed reasoning</summary>
-              <div className="markdown-shell">
-                {normalizeStringArray(item.content).map((entry, index) => (
-                  <p key={`${item.id}-content-${entry}`}>{entry}</p>
-                ))}
-              </div>
+          {firstLine ? <p className="reasoning-first-line">{firstLine}</p> : null}
+          {hasMore ? (
+            <details className="collapsible-block">
+              <summary className="collapsible-summary">more reasoning</summary>
+              {summaryLines.length > 1 ? (
+                <ul className="reasoning-summary">
+                  {summaryLines.slice(1).map((entry) => (
+                    <li key={`${item.id}-summary-${entry}`}>{entry}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {contentLines.length > 0 ? (
+                <div className="markdown-shell">
+                  {contentLines.map((entry) => (
+                    <p key={`${item.id}-content-${entry}`}>{entry}</p>
+                  ))}
+                </div>
+              ) : null}
             </details>
           ) : null}
         </div>
       );
+    }
     case "plan":
       return <pre className="plain-block">{asString(item.text)}</pre>;
     case "commandExecution":
       return (
-        <div className="tool-block">
-          <pre className="code-slab">{asString(item.command)}</pre>
-          <p className="approval-meta">cwd: {asString(item.cwd)}</p>
-          {asString(item.aggregatedOutput) ? <pre className="plain-block">{asString(item.aggregatedOutput)}</pre> : null}
-        </div>
+        <details className="collapsible-block">
+          <summary className="collapsible-summary"><span className="collapsible-command">{asString(item.command) || "(command)"}</span></summary>
+          <div className="tool-block" style={{ marginTop: 6 }}>
+            <p className="approval-meta">cwd: {asString(item.cwd)}</p>
+            {asString(item.aggregatedOutput) ? <pre className="plain-block">{asString(item.aggregatedOutput)}</pre> : null}
+          </div>
+        </details>
       );
     case "fileChange":
       return (
@@ -1917,16 +1940,6 @@ function extractFileChangePaths(item: ThreadItem | undefined): string[] {
       return null;
     })
     .filter((entry): entry is string => Boolean(entry));
-}
-
-function formatThreadStatus(status: { type: string; activeFlags?: string[] }) {
-  if (status.type !== "active") {
-    return status.type;
-  }
-
-  return status.activeFlags && status.activeFlags.length > 0
-    ? `active · ${status.activeFlags.join(", ")}`
-    : "active";
 }
 
 function formatSessionSource(source: unknown): string {

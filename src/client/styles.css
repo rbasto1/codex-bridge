@@ -1000,6 +1000,51 @@ button {
   margin-top: 4px;
 }
 
+/* ── Collapsible blocks ───────────────────────── */
+.collapsible-block {
+  margin: 0;
+}
+
+.collapsible-summary {
+  cursor: pointer;
+  color: var(--text-weak);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-mono);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.collapsible-summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible-summary::before {
+  content: "▸";
+  font-size: 10px;
+  color: var(--text-weaker);
+  transition: transform 0.15s ease;
+}
+
+details[open] > .collapsible-summary::before {
+  transform: rotate(90deg);
+}
+
+.collapsible-command {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.reasoning-first-line {
+  margin: 0;
+  color: var(--text-base);
+  font-size: var(--font-size-base);
+}
+
 /* ── Buttons ───────────────────────────────────── */
 .button {
   display: inline-flex;
@@ -1047,8 +1092,8 @@ button {
 .composer-shell {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 24px 12px;
+  gap: 2px;
+  padding: 12px 24px 4px;
   background: var(--bg-base);
   border-top: 1px solid var(--border-weak);
   flex-shrink: 0;

@@ -61,6 +61,38 @@ export type UserInput =
   | { type: "skill"; name: string; path: string }
   | { type: "mention"; name: string; path: string };
 
+export type ReasoningEffort = "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
+
+export type ApprovalPolicy =
+  | "untrusted"
+  | "on-failure"
+  | "on-request"
+  | "never"
+  | {
+      granular: {
+        mcp_elicitations: boolean;
+        request_permissions?: boolean;
+        rules: boolean;
+        sandbox_approval: boolean;
+        skill_approval?: boolean;
+      };
+    };
+
+export type SandboxPolicy = {
+  type: "dangerFullAccess" | "readOnly" | "externalSandbox" | "workspaceWrite";
+  [key: string]: unknown;
+};
+
+export type ThreadSessionConfig = {
+  cwd: string;
+  model: string;
+  reasoningEffort: ReasoningEffort | null;
+  approvalPolicy: ApprovalPolicy;
+  sandbox: SandboxPolicy;
+};
+
+export type CollaborationModeKind = "default" | "plan";
+
 export type ThreadItem = {
   id: string;
   type: string;
