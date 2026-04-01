@@ -1457,35 +1457,63 @@ details[open] > .collapsible-summary::before {
   margin-top: 16px;
 }
 
-/* ── Icon picker ──────────────────────────────── */
-.icon-picker-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+/* ── Icon upload ──────────────────────────────── */
+.icon-upload-area {
   margin-top: 6px;
 }
 
-.icon-picker-item {
+.icon-upload-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.icon-upload-img {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  border: 1px solid var(--border-weak);
+}
+
+.icon-upload-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid var(--border-weak);
+  padding: 8px 16px;
+  border: 1px dashed var(--border-weak);
   border-radius: var(--radius-md);
   background: var(--surface-base);
   color: var(--text-base);
-  font-size: 18px;
+  font-size: var(--font-size-sm);
   cursor: pointer;
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
-.icon-picker-item:hover {
+.icon-upload-btn:hover {
   background: var(--surface-base-hover);
   border-color: var(--text-weak);
 }
 
-.icon-picker-item.active {
-  border-color: var(--border-selected);
-  background: rgba(3, 76, 255, 0.08);
+/* ── Project tile icon ───────────────────────── */
+.project-tile:has(.project-tile-icon) {
+  padding: 0;
+  overflow: hidden;
+}
+
+.project-tile-icon {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ── Drag-and-drop ───────────────────────────── */
+.project-tile-wrapper.dragging {
+  opacity: 0.4;
+}
+
+.project-tile-wrapper.drag-over {
+  border-top: 2px solid var(--border-selected, #034cff);
+  margin-top: -2px;
 }

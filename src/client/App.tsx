@@ -7,23 +7,25 @@ import { useShallow } from "zustand/react/shallow";
 
 import {
   ApiError,
+  deleteProjectIcon,
   fetchEnvHome,
   fetchInit,
   fetchProjectState,
   interruptTurn,
   listAvailableModels,
   listAllThreads,
+  projectIconUrl,
   readThread,
   generateThreadName,
   renameThread,
   respondToServerRequest,
   restartServer,
   resumeThread,
-  saveProjectIcon,
   saveProjectState,
   startThread,
   startTurn,
   steerTurn,
+  uploadProjectIcon,
   type ModelOption,
   type ThreadResponse,
   type ThreadSessionResponse,
@@ -176,10 +178,11 @@ export default function App() {
   const [showHiddenProjects, setShowHiddenProjects] = useState(false);
   const [contextMenuProject, setContextMenuProject] = useState<{ project: string; x: number; y: number } | null>(null);
   const [showEditProjectModal, setShowEditProjectModal] = useState<string | null>(null);
-  const [projectIcons, setProjectIcons] = useState<Record<string, string>>({});
+  const [projectIconVersions, setProjectIconVersions] = useState<Record<string, number>>({});
   const [projectState, setProjectState] = useState<Array<{ id: string; name: string }>>([]);
   const [projectRenameDraft, setProjectRenameDraft] = useState("");
   const longPressTimerRef = useRef<number | null>(null);
+  const iconInputRef = useRef<HTMLInputElement | null>(null);
 
   const deferredSearchTerm = useDeferredValue(searchTerm.trim().toLowerCase());
 
@@ -250,7 +253,12 @@ export default function App() {
         const state = await fetchProjectState();
         if (!cancelled) {
           setProjectState(state.projects ?? []);
-          setProjectIcons(state.icons ?? {});
+          setHiddenProjects(state.hidden ?? []);
+          const versions: Record<string, number> = {};
+          for (const id of state.iconIds ?? []) {
+            versions[id] = Date.now();
+          }
+          setProjectIconVersions(versions);
         }
       } catch {
         // non-critical
@@ -595,7 +603,11 @@ export default function App() {
   }
 
   function handleHideProject(project: string) {
-    setHiddenProjects((previous) => (previous.includes(project) ? previous : [...previous, project]));
+    setHiddenProjects((previous) => {
+      const next = previous.includes(project) ? previous : [...previous, project];
+      persistProjectState(projectState, next);
+      return next;
+    });
     if (currentProject === project) {
       const remaining = projectOptions.filter((p) => p !== project && !hiddenProjects.includes(p));
       setCurrentProject(remaining[0] ?? "");
@@ -604,31 +616,57 @@ export default function App() {
   }
 
   function handleUnhideProject(project: string) {
-    setHiddenProjects((previous) => previous.filter((p) => p !== project));
-  }
-
-  function handleMoveProject(project: string, direction: -1 | 1) {
-    const idx = visibleProjects.indexOf(project);
-    if (idx < 0) return;
-    const targetIdx = idx + direction;
-    if (targetIdx < 0 || targetIdx >= visibleProjects.length) return;
-    const reordered = [...visibleProjects];
-    [reordered[idx], reordered[targetIdx]] = [reordered[targetIdx], reordered[idx]];
-    // Persist order in projectState
-    setProjectState((prev) => {
-      const next = reordered.map((p) => {
-        const existing = prev.find((e) => e.id === p);
-        return existing || { id: p, name: "" };
-      });
-      persistProjectState(next, projectIcons);
+    setHiddenProjects((previous) => {
+      const next = previous.filter((p) => p !== project);
+      persistProjectState(projectState, next);
       return next;
     });
+  }
+
+  const [draggedProject, setDraggedProject] = useState<string | null>(null);
+  const [dragOverProject, setDragOverProject] = useState<string | null>(null);
+
+  function handleDragStart(project: string, e: React.DragEvent) {
+    setDraggedProject(project);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", project);
+  }
+
+  function handleDragOver(project: string, e: React.DragEvent) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (project !== dragOverProject) setDragOverProject(project);
+  }
+
+  function handleDrop(targetProject: string, e: React.DragEvent) {
+    e.preventDefault();
+    setDragOverProject(null);
+    if (!draggedProject || draggedProject === targetProject) { setDraggedProject(null); return; }
+    const fromIdx = visibleProjects.indexOf(draggedProject);
+    const toIdx = visibleProjects.indexOf(targetProject);
+    if (fromIdx < 0 || toIdx < 0) { setDraggedProject(null); return; }
+    const reordered = [...visibleProjects];
+    reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, draggedProject);
+    setProjectState((prev) => {
+      const next = reordered.map((p) => {
+        const existing = prev.find((ee) => ee.id === p);
+        return existing || { id: p, name: "" };
+      });
+      persistProjectState(next, hiddenProjects);
+      return next;
+    });
+    setDraggedProject(null);
+  }
+
+  function handleDragEnd() {
+    setDraggedProject(null);
+    setDragOverProject(null);
   }
 
   function handleSaveProjectEdit() {
     if (!showEditProjectModal) return;
     const project = showEditProjectModal;
-    const projectId = encodeProjectId(project);
 
     // Save name
     setProjectState((prev) => {
@@ -640,19 +678,55 @@ export default function App() {
       } else {
         next.push(entry);
       }
-      persistProjectState(next, projectIcons);
+      persistProjectState(next, hiddenProjects);
       return next;
     });
-
-    // Save icon
-    const icon = projectIcons[projectId] || "";
-    void saveProjectIcon(projectId, icon);
 
     setShowEditProjectModal(null);
   }
 
-  function persistProjectState(projects: Array<{ id: string; name: string }>, icons: Record<string, string>) {
-    void saveProjectState({ projects, icons });
+  async function handleIconUpload(file: File) {
+    if (!showEditProjectModal) return;
+    const projectId = encodeProjectId(showEditProjectModal);
+
+    // Load image
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = reject;
+      i.src = URL.createObjectURL(file);
+    });
+
+    // Resize to 64x64
+    const canvas = document.createElement("canvas");
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext("2d")!;
+    ctx.drawImage(img, 0, 0, 64, 64);
+    URL.revokeObjectURL(img.src);
+
+    const blob = await new Promise<Blob>((resolve) =>
+      canvas.toBlob((b) => resolve(b!), "image/png"),
+    );
+
+    // Upload then update state
+    await uploadProjectIcon(projectId, blob);
+    setProjectIconVersions((prev) => ({ ...prev, [projectId]: Date.now() }));
+  }
+
+  async function handleIconRemove() {
+    if (!showEditProjectModal) return;
+    const projectId = encodeProjectId(showEditProjectModal);
+    await deleteProjectIcon(projectId);
+    setProjectIconVersions((prev) => {
+      const next = { ...prev };
+      delete next[projectId];
+      return next;
+    });
+  }
+
+  function persistProjectState(projects: Array<{ id: string; name: string }>, hidden: string[]) {
+    void saveProjectState({ projects, hidden });
   }
 
   const visibleProjectsUnordered = projectOptions.filter((p) => !hiddenProjects.includes(p));
@@ -931,14 +1005,20 @@ export default function App() {
           <div className="project-rail-list">
             {visibleProjects.map((project) => {
               const projectId = encodeProjectId(project);
-              const displayIcon = projectIcons[projectId];
+              const hasIcon = projectId in projectIconVersions;
               const stateEntry = projectState.find((e) => e.id === project);
-              const label = stateEntry?.name || formatProjectTileLabel(project);
+              const tileLabel = formatProjectTileLabel(stateEntry?.name || project);
+              const isDragOver = dragOverProject === project && draggedProject !== project;
               return (
-                <div key={project} className="project-tile-wrapper">
+                <div key={project} className={`project-tile-wrapper${isDragOver ? " drag-over" : ""}${draggedProject === project ? " dragging" : ""}`}>
                   <button
                     type="button"
                     className={`project-tile ${project === currentProject ? "active" : ""}`}
+                    draggable
+                    onDragStart={(e) => handleDragStart(project, e)}
+                    onDragOver={(e) => handleDragOver(project, e)}
+                    onDrop={(e) => handleDrop(project, e)}
+                    onDragEnd={handleDragEnd}
                     onClick={() => handleSelectProject(project)}
                     onContextMenu={(e) => {
                       e.preventDefault();
@@ -956,41 +1036,45 @@ export default function App() {
                     title={project}
                     data-project={project}
                   >
-                    {displayIcon || label}
+                    {hasIcon ? <img src={`${projectIconUrl(projectId)}?v=${projectIconVersions[projectId]}`} alt="" className="project-tile-icon" /> : tileLabel}
                   </button>
                 </div>
               );
             })}
             {overflowProjects.length > 0 ? (
-              <div className="project-tile-wrapper">
+              <>
                 <button
                   type="button"
                   className={`project-tile ${showHiddenProjects ? "active" : ""}`}
                   onClick={() => setShowHiddenProjects((v) => !v)}
-                  title="Show hidden projects"
+                  title={showHiddenProjects ? "Collapse hidden projects" : "Show hidden projects"}
                 >
-                  &#x2026;
+                  {showHiddenProjects ? "\u25B2" : "\u2026"}
                 </button>
-                {showHiddenProjects ? (
-                  <div className="project-overflow-menu">
-                    {overflowProjects.map((project) => (
+                {showHiddenProjects ? overflowProjects.map((project) => {
+                  const projectId = encodeProjectId(project);
+                  const hasIcon = projectId in projectIconVersions;
+                  const stateEntry = projectState.find((e) => e.id === project);
+                  const tileLabel = formatProjectTileLabel(stateEntry?.name || project);
+                  return (
+                    <div key={project} className="project-tile-wrapper">
                       <button
-                        key={project}
                         type="button"
-                        className="project-overflow-item"
+                        className={`project-tile ${project === currentProject ? "active" : ""}`}
                         onClick={() => {
                           handleUnhideProject(project);
                           handleSelectProject(project);
                           setShowHiddenProjects(false);
                         }}
                         title={project}
+                        data-project={project}
                       >
-                        {formatProjectTileLabel(project)} <span className="project-overflow-path">{project.split("/").filter(Boolean).pop()}</span>
+                        {hasIcon ? <img src={`${projectIconUrl(projectId)}?v=${projectIconVersions[projectId]}`} alt="" className="project-tile-icon" /> : tileLabel}
                       </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
+                    </div>
+                  );
+                }) : null}
+              </>
             ) : null}
             <button
               type="button"
@@ -1302,27 +1386,11 @@ export default function App() {
             }}>
               Edit
             </button>
-            {visibleProjects.indexOf(contextMenuProject.project) > 0 ? (
-              <button type="button" className="context-menu-item" onClick={() => {
-                handleMoveProject(contextMenuProject.project, -1);
-                setContextMenuProject(null);
-              }}>
-                Move up
-              </button>
-            ) : null}
-            {visibleProjects.indexOf(contextMenuProject.project) < visibleProjects.length - 1 ? (
-              <button type="button" className="context-menu-item" onClick={() => {
-                handleMoveProject(contextMenuProject.project, 1);
-                setContextMenuProject(null);
-              }}>
-                Move down
-              </button>
-            ) : null}
           </div>
         </div>
       ) : null}
 
-      {/* Edit project modal (icon picker + rename) */}
+      {/* Edit project modal (icon upload + rename) */}
       {showEditProjectModal ? (
         <div className="modal-backdrop" onClick={() => setShowEditProjectModal(null)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
@@ -1339,35 +1407,24 @@ export default function App() {
               }}
               placeholder="Project name"
             />
-            <label className="field-label" style={{ marginTop: 12 }}>Icon (emoji or 2 characters)</label>
-            <div className="icon-picker-grid">
-              {["📁", "🚀", "🔧", "📦", "🎨", "🔬", "💡", "🌐", "🛠️", "📊", "🎯", "⚡", "🐛", "📝", "🔒", "🏠", "💻", "🎮", "📱", "🧪"].map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  className={`icon-picker-item ${projectIcons[encodeProjectId(showEditProjectModal)] === emoji ? "active" : ""}`}
-                  onClick={() => {
-                    const id = encodeProjectId(showEditProjectModal);
-                    setProjectIcons((prev) => ({ ...prev, [id]: emoji }));
-                  }}
-                >
-                  {emoji}
-                </button>
-              ))}
-              <button
-                type="button"
-                className={`icon-picker-item ${!projectIcons[encodeProjectId(showEditProjectModal)] ? "active" : ""}`}
-                onClick={() => {
-                  const id = encodeProjectId(showEditProjectModal);
-                  setProjectIcons((prev) => {
-                    const next = { ...prev };
-                    delete next[id];
-                    return next;
-                  });
-                }}
-              >
-                Aa
-              </button>
+            <label className="field-label" style={{ marginTop: 12 }}>Icon</label>
+            <div className="icon-upload-area">
+              {encodeProjectId(showEditProjectModal) in projectIconVersions ? (
+                <div className="icon-upload-preview">
+                  <img src={`${projectIconUrl(encodeProjectId(showEditProjectModal))}?v=${projectIconVersions[encodeProjectId(showEditProjectModal)]}`} alt="Project icon" className="icon-upload-img" />
+                  <button type="button" className="button secondary" onClick={() => void handleIconRemove()}>Remove</button>
+                </div>
+              ) : (
+                <label className="icon-upload-btn">
+                  Upload image
+                  <input ref={iconInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    void handleIconUpload(file);
+                    e.target.value = "";
+                  }} />
+                </label>
+              )}
             </div>
             <div className="modal-actions">
               <button type="button" className="button primary" onClick={handleSaveProjectEdit}>Save</button>

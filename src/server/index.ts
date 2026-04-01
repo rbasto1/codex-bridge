@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -26,7 +26,20 @@ const RPC_METHODS = [
 const bridge = new CodexAppServerBridge();
 const app = express();
 
-app.use(express.json({ limit: "2mb" }));
+// Icon upload route MUST be registered before express.json() to avoid body consumption
+app.post("/api/projects/icons/:projectId", express.raw({ type: "image/*", limit: "1mb" }), (request, response) => {
+  ensureCodexDir();
+  const filePath = path.join(CODEX_DIR, "icons", request.params.projectId);
+  if (!Buffer.isBuffer(request.body) || request.body.length === 0) {
+    try { unlinkSync(filePath); } catch { /* ignore */ }
+    response.json({ ok: true });
+    return;
+  }
+  writeFileSync(filePath, request.body);
+  response.json({ ok: true });
+});
+
+app.use(express.json({ limit: "10mb" }));
 
 app.get("/api/health", (_request, response) => {
   const snapshot = bridge.getSnapshot();
@@ -186,12 +199,15 @@ function ensureCodexDir() {
 app.get("/api/projects/state", (_request, response) => {
   ensureCodexDir();
   const filePath = path.join(CODEX_DIR, "state.json");
+  let data: Record<string, unknown> = { projects: [], hidden: [] };
   try {
-    const raw = readFileSync(filePath, "utf-8");
-    response.json(JSON.parse(raw));
-  } catch {
-    response.json({ projects: [], icons: {} });
-  }
+    data = JSON.parse(readFileSync(filePath, "utf-8")) as Record<string, unknown>;
+  } catch { /* use defaults */ }
+  // Include list of project IDs that have icon files
+  const iconsDir = path.join(CODEX_DIR, "icons");
+  let iconIds: string[] = [];
+  try { iconIds = readdirSync(iconsDir); } catch { /* empty */ }
+  response.json({ ...data, iconIds });
 });
 
 app.post("/api/projects/state", (request, response) => {
@@ -204,19 +220,19 @@ app.post("/api/projects/state", (request, response) => {
 app.get("/api/projects/icons/:projectId", (request, response) => {
   ensureCodexDir();
   const filePath = path.join(CODEX_DIR, "icons", request.params.projectId);
-  try {
-    const icon = readFileSync(filePath, "utf-8").trim();
-    response.json({ icon });
-  } catch {
-    response.json({ icon: null });
+  if (!existsSync(filePath)) {
+    response.status(404).json({ error: "not found" });
+    return;
   }
+  response.setHeader("Content-Type", "image/png");
+  response.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  response.send(readFileSync(filePath));
 });
 
-app.post("/api/projects/icons/:projectId", (request, response) => {
+app.delete("/api/projects/icons/:projectId", (request, response) => {
   ensureCodexDir();
   const filePath = path.join(CODEX_DIR, "icons", request.params.projectId);
-  const icon = isRecord(request.body) && typeof request.body.icon === "string" ? request.body.icon : "";
-  writeFileSync(filePath, icon);
+  try { unlinkSync(filePath); } catch { /* ignore */ }
   response.json({ ok: true });
 });
 

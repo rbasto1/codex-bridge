@@ -119,7 +119,7 @@ export async function listAvailableModels(): Promise<ModelOption[]> {
   let cursor: string | null = null;
 
   do {
-    const page = await requestJson<ModelListResponse>("/api/model/list", {
+    const page: ModelListResponse = await requestJson<ModelListResponse>("/api/model/list", {
       method: "POST",
       body: JSON.stringify({
         cursor,
@@ -231,31 +231,43 @@ export async function respondToServerRequest(body: {
   });
 }
 
-export type ProjectStateData = {
+export type ProjectStateResponse = {
   projects: Array<{ id: string; name: string }>;
-  icons: Record<string, string>;
+  hidden: string[];
+  iconIds: string[];
 };
 
-export async function fetchProjectState(): Promise<ProjectStateData> {
-  return requestJson<ProjectStateData>("/api/projects/state");
+export type ProjectStateSaveData = {
+  projects: Array<{ id: string; name: string }>;
+  hidden: string[];
+};
+
+export async function fetchProjectState(): Promise<ProjectStateResponse> {
+  return requestJson<ProjectStateResponse>("/api/projects/state");
 }
 
-export async function saveProjectState(data: ProjectStateData): Promise<void> {
+export async function saveProjectState(data: ProjectStateSaveData): Promise<void> {
   await requestJson("/api/projects/state", {
     method: "POST",
     body: JSON.stringify(data),
   });
 }
 
-export async function fetchProjectIcon(projectId: string): Promise<string | null> {
-  const result = await requestJson<{ icon: string | null }>(`/api/projects/icons/${encodeURIComponent(projectId)}`);
-  return result.icon;
+export function projectIconUrl(projectId: string): string {
+  return `/api/projects/icons/${encodeURIComponent(projectId)}`;
 }
 
-export async function saveProjectIcon(projectId: string, icon: string): Promise<void> {
-  await requestJson(`/api/projects/icons/${encodeURIComponent(projectId)}`, {
+export async function uploadProjectIcon(projectId: string, pngBlob: Blob): Promise<void> {
+  await fetch(`/api/projects/icons/${encodeURIComponent(projectId)}`, {
     method: "POST",
-    body: JSON.stringify({ icon }),
+    headers: { "Content-Type": "image/png" },
+    body: pngBlob,
+  });
+}
+
+export async function deleteProjectIcon(projectId: string): Promise<void> {
+  await fetch(`/api/projects/icons/${encodeURIComponent(projectId)}`, {
+    method: "DELETE",
   });
 }
 
