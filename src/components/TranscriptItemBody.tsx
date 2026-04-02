@@ -12,7 +12,7 @@ export function TranscriptItemBody(props: TranscriptItemBodyProps) {
 
   switch (item.type) {
     case "userMessage":
-      return <div className="markdown-shell"><p>{renderUserInputs(item.content)}</p></div>;
+      return <MarkdownBlock text={renderUserInputs(item.content)} preserveNewlines />;
     case "agentMessage":
       return <MarkdownBlock text={asString(item.text)} />;
     case "reasoning": {

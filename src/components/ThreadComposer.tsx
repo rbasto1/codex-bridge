@@ -31,6 +31,17 @@ export function ThreadComposer(props: ThreadComposerProps) {
             className="composer-input"
             value={props.composerValue}
             onChange={(event) => props.onChangeComposer(event.target.value)}
+            onKeyDown={(event) => {
+              const isSubmitShortcut = event.key === "Enter" && (event.ctrlKey || event.altKey || event.metaKey);
+              if (!isSubmitShortcut) {
+                return;
+              }
+
+              event.preventDefault();
+              if (!props.composerActionDisabled) {
+                props.onSubmit();
+              }
+            }}
             placeholder={props.isLive ? "Message Codex" : "Resume the thread live to continue the conversation"}
             disabled={!props.currentThread || !props.isLive}
           />

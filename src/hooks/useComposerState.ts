@@ -33,7 +33,10 @@ export function useComposerState(options: UseComposerStateOptions) {
     setActionError,
   } = options;
 
-  const [composerDrafts, setComposerDrafts] = useState<Record<string, string>>({});
+  const [composerDrafts, setComposerDrafts] = useState<Record<string, string>>(initialUi.composerDrafts ?? {});
+  const [defaultPermissionMode, setDefaultPermissionMode] = useState<"standard" | "full">(
+    initialUi.defaultPermissionMode ?? "standard",
+  );
   const [threadControlDrafts, setThreadControlDrafts] = useState<Record<string, ComposerControlDraft>>(
     initialUi.threadControlDrafts ?? {},
   );
@@ -137,13 +140,14 @@ export function useComposerState(options: UseComposerStateOptions) {
       if (!nextDraft) {
         return previous;
       }
+      nextDraft.fullAccess = defaultPermissionMode === "full";
 
       return {
         ...previous,
         [activeThreadId]: nextDraft,
       };
     });
-  }, [activeThreadId, availableModels, currentThread, currentThreadSessionConfig]);
+  }, [activeThreadId, availableModels, currentThread, currentThreadSessionConfig, defaultPermissionMode]);
 
   function setComposerValue(value: string) {
     if (!activeThreadId) {
@@ -191,6 +195,8 @@ export function useComposerState(options: UseComposerStateOptions) {
   }
 
   function toggleFullAccess() {
+    const nextMode = composerControlDraft?.fullAccess ? "standard" : "full";
+    setDefaultPermissionMode(nextMode);
     updateCurrentThreadControls((current) => ({
       ...current,
       fullAccess: !current.fullAccess,
@@ -225,6 +231,8 @@ export function useComposerState(options: UseComposerStateOptions) {
     composerControlDraft,
     composerControlsDisabled,
     composerValue,
+    composerDrafts,
+    defaultPermissionMode,
     focusToken,
     formatReasoningEffort,
     hasComposerText,
@@ -244,6 +252,7 @@ export function useComposerState(options: UseComposerStateOptions) {
     selectComposerModel,
     setComposerBusy,
     setComposerValue,
+    setDefaultPermissionMode,
     setThreadPermissionBaselines,
     toggleFullAccess,
   };

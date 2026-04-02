@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 
-import { formatSessionSource } from "../lib/threads";
 import type { ThreadHeaderProps } from "../types";
 
 export function ThreadHeader(props: ThreadHeaderProps) {
@@ -13,7 +12,7 @@ export function ThreadHeader(props: ThreadHeaderProps) {
   useEffect(() => {
     setRenameDraft(thread.name ?? thread.preview);
     setIsEditingTitle(false);
-  }, [thread]);
+  }, [thread.id, thread.name, thread.preview]);
 
   useEffect(() => {
     if (!isEditingTitle) {
@@ -62,65 +61,66 @@ export function ThreadHeader(props: ThreadHeaderProps) {
 
   return (
     <section className="thread-header">
-      <div className="thread-header-main">
-        <div className="thread-title-row">
-          <span className={`thread-status-dot ${thread.status.type === "active" ? "running" : "idle"}`} />
-          {isEditingTitle ? (
-            <input
-              ref={titleInputRef}
-              className="thread-title-input"
-              value={renameDraft}
-              onChange={(event) => setRenameDraft(event.target.value)}
-              onBlur={() => void handleRename()}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  void handleRename();
-                }
+      <div className="workspace-column thread-header-column">
+        <div className="thread-header-main">
+          <div className="thread-title-row">
+            <span className={`thread-status-dot ${thread.status.type === "active" ? "running" : "idle"}`} />
+            {isEditingTitle ? (
+              <input
+                ref={titleInputRef}
+                className="thread-title-input"
+                value={renameDraft}
+                onChange={(event) => setRenameDraft(event.target.value)}
+                onBlur={() => void handleRename()}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void handleRename();
+                  }
 
-                if (event.key === "Escape") {
-                  event.preventDefault();
-                  handleCancelRename();
-                }
-              }}
-              placeholder={thread.preview || thread.id}
-              disabled={isRenaming}
-            />
-          ) : (
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    handleCancelRename();
+                  }
+                }}
+                placeholder={thread.preview || thread.id}
+                disabled={isRenaming}
+              />
+            ) : (
+              <button
+                type="button"
+                className="thread-title-button"
+                onClick={() => setIsEditingTitle(true)}
+                title={renameDraft || thread.preview || thread.id}
+              >
+                {renameDraft || thread.preview || thread.id}
+              </button>
+            )}
+          </div>
+
+          <div className="thread-meta-row">
+            <span className={`badge ${currentThreadIsUiDraft || isLive ? "badge-live" : "badge-replay"}`}>
+              {currentThreadIsUiDraft ? "Draft session" : isLive ? "Live attached" : "Replay only"}
+            </span>
+          </div>
+        </div>
+
+        {!currentThreadIsUiDraft ? (
+          <div className="thread-header-actions">
+            <button type="button" className="button secondary" onClick={onOpenReplay}>
+              Refresh replay
+            </button>
             <button
               type="button"
-              className="thread-title-button"
-              onClick={() => setIsEditingTitle(true)}
-              title={renameDraft || thread.preview || thread.id}
+              className="button primary"
+              onClick={onOpenLive}
+              disabled={threadLoadingId === thread.id}
             >
-              {renameDraft || thread.preview || thread.id}
+              {isLive ? "Live attached" : threadLoadingId === thread.id ? "Attaching..." : "Resume live"}
             </button>
-          )}
-        </div>
-
-        <div className="thread-meta-row">
-          <span className={`badge ${currentThreadIsUiDraft || isLive ? "badge-live" : "badge-replay"}`}>
-            {currentThreadIsUiDraft ? "Draft session" : isLive ? "Live attached" : "Replay only"}
-          </span>
-          <span className="badge">{formatSessionSource(thread.source)}</span>
-        </div>
+          </div>
+        ) : null}
       </div>
-
-      {!currentThreadIsUiDraft ? (
-        <div className="thread-header-actions">
-          <button type="button" className="button secondary" onClick={onOpenReplay}>
-            Refresh replay
-          </button>
-          <button
-            type="button"
-            className="button primary"
-            onClick={onOpenLive}
-            disabled={threadLoadingId === thread.id}
-          >
-            {isLive ? "Live attached" : threadLoadingId === thread.id ? "Attaching..." : "Resume live"}
-          </button>
-        </div>
-      ) : null}
     </section>
   );
 }

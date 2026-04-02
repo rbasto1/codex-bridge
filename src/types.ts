@@ -25,6 +25,10 @@ export interface PersistedUi {
   activeMode?: ThreadMode;
   currentProject?: string;
   customProjects?: string[];
+  draftThreads?: Thread[];
+  composerDrafts?: Record<string, string>;
+  doneThreadIds?: string[];
+  defaultPermissionMode?: "standard" | "full";
   threadControlDrafts?: Record<string, ComposerControlDraft>;
   threadPermissionBaselines?: Record<string, PermissionBaseline>;
 }
@@ -146,11 +150,13 @@ export interface AppStore {
   pendingServerRequestsById: Record<string, BrowserServerRequest>;
   selectedThreadError: string | null;
   nonSteerableThreadIds: Record<string, boolean>;
+  unreadThreadIds: Record<string, true>;
   setSnapshot: (snapshot: BackendSnapshot) => void;
   replaceThreads: (threads: Thread[]) => void;
   hydrateThread: (thread: Thread, mode: ThreadMode, sessionConfig?: ThreadSessionConfig | null) => void;
   setActiveThread: (threadId: string | null) => void;
   setSelectedThreadError: (message: string | null) => void;
+  clearThreadUnread: (threadId: string) => void;
   setThreadSessionConfig: (threadId: string, sessionConfig: ThreadSessionConfig) => void;
   updateThreadName: (threadId: string, name: string | null) => void;
   removeThread: (threadId: string) => void;
@@ -163,7 +169,10 @@ export interface AppStore {
 export interface SessionRowProps {
   threadId: string;
   active: boolean;
+  done: boolean;
+  showUnread: boolean;
   onOpen: () => void;
+  onToggleDone: () => void;
 }
 
 export interface TranscriptViewProps {
@@ -193,6 +202,7 @@ export interface TranscriptItemBodyProps {
 
 export interface MarkdownBlockProps {
   text: string;
+  preserveNewlines?: boolean;
 }
 
 export interface CopyMessageButtonProps {
@@ -260,6 +270,7 @@ export interface ProjectSidebarProps {
   threadOrder: string[];
   threadsById: Record<string, Thread>;
   visibleProjects: string[];
+  doneThreadIds: Record<string, true>;
   onAddProject: (project: string) => void;
   onHideProject: (project: string) => void;
   onOpenThread: (threadId: string, mode: ThreadMode) => void;
@@ -271,6 +282,7 @@ export interface ProjectSidebarProps {
   onStartThread: () => void;
   onUnhideProject: (project: string) => void;
   onUploadProjectIcon: (project: string, file: File) => Promise<void>;
+  onToggleThreadDone: (threadId: string) => void;
 }
 
 export interface ProjectContextMenuProps {
