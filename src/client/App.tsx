@@ -43,6 +43,7 @@ import {
   type Thread,
   type ThreadItem,
   type ThreadSessionConfig,
+  type TurnStatus,
   type UserInput,
 } from "../shared/codex.js";
 import codexLogoUrl from "../../codex.svg";
@@ -1611,6 +1612,14 @@ function TurnBlock(props: {
         !itemIds.includes(request.itemId as string),
     ),
   );
+  const turnItems = useAppStore(
+    useShallow((state) =>
+      itemIds
+        .map((itemId) => state.itemsById[itemId])
+        .filter((item): item is ThreadItem => Boolean(item)),
+    ),
+  );
+  const agentCopyText = buildTurnAgentCopyText(turnItems, turn?.status);
 
   return (
     <div className="turn-card">
@@ -1619,35 +1628,43 @@ function TurnBlock(props: {
         <span className="badge muted">{turn?.status ?? "inProgress"}</span>
       </div>
 
-      <div className="turn-items">
-        {itemIds.map((itemId) => (
-          <TranscriptItemCard
-            key={itemId}
-            threadId={threadId}
-            turnId={turnId}
-            itemId={itemId}
-            respondingRequestKey={respondingRequestKey}
-            onRespond={onRespond}
-          />
-        ))}
+      <div className={`turn-content ${agentCopyText ? "turn-copyable" : ""}`}>
+        <div className="turn-items">
+          {itemIds.map((itemId) => (
+            <TranscriptItemCard
+              key={itemId}
+              threadId={threadId}
+              turnId={turnId}
+              itemId={itemId}
+              respondingRequestKey={respondingRequestKey}
+              onRespond={onRespond}
+            />
+          ))}
 
-        {turnRequests.map((request) => (
-          <ApprovalCard
-            key={request.key}
-            request={request}
-            disabled={respondingRequestKey === request.key}
-            onRespond={onRespond}
-          />
-        ))}
+          {turnRequests.map((request) => (
+            <ApprovalCard
+              key={request.key}
+              request={request}
+              disabled={respondingRequestKey === request.key}
+              onRespond={onRespond}
+            />
+          ))}
 
-        {orphanItemRequests.map((request) => (
-          <ApprovalCard
-            key={request.key}
-            request={request}
-            disabled={respondingRequestKey === request.key}
-            onRespond={onRespond}
-          />
-        ))}
+          {orphanItemRequests.map((request) => (
+            <ApprovalCard
+              key={request.key}
+              request={request}
+              disabled={respondingRequestKey === request.key}
+              onRespond={onRespond}
+            />
+          ))}
+        </div>
+
+        {agentCopyText ? (
+          <div className="turn-copy-slot">
+            <CopyMessageButton className="turn-copy-button" text={agentCopyText} />
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -1673,16 +1690,26 @@ function TranscriptItemCard(props: {
   }
 
   const itemLabel = formatItemLabel(item.type);
+  const copyText = item.type === "userMessage" ? renderUserInputs(item.content) : "";
+  const isCopyableMessage = copyText.length > 0;
+  const itemBody = renderItemBody(item);
 
   return (
-    <div className={`item-card item-${item.type}`}>
+    <div className={`item-card item-${item.type} ${isCopyableMessage ? "item-copyable" : ""}`}>
       {itemLabel ? (
         <div className="item-header">
           <span className="eyebrow">{itemLabel}</span>
         </div>
       ) : null}
 
-      <div className="item-body">{renderItemBody(item)}</div>
+      {isCopyableMessage ? (
+        <div className="message-shell">
+          <div className="item-body">{itemBody}</div>
+          <CopyMessageButton className="message-copy-button" text={copyText} />
+        </div>
+      ) : (
+        <div className="item-body">{itemBody}</div>
+      )}
 
       {itemRequests.map((request) => (
         <ApprovalCard
@@ -2061,6 +2088,82 @@ function MarkdownBlock(props: { text: string }) {
   );
 }
 
+function CopyMessageButton(props: { text: string; className?: string }) {
+  const [copied, setCopied] = useState(false);
+  const resetTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (resetTimerRef.current !== null) {
+        window.clearTimeout(resetTimerRef.current);
+      }
+    };
+  }, []);
+
+  async function handleCopy() {
+    if (!props.text) {
+      return;
+    }
+
+    try {
+      await copyTextToClipboard(props.text);
+      setCopied(true);
+
+      if (resetTimerRef.current !== null) {
+        window.clearTimeout(resetTimerRef.current);
+      }
+
+      resetTimerRef.current = window.setTimeout(() => {
+        setCopied(false);
+      }, 2000);
+    } catch (error) {
+      console.error("Copy failed", error);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      className={`copy-icon-button ${props.className ?? ""} ${copied ? "copied" : ""}`.trim()}
+      onClick={() => void handleCopy()}
+      aria-label={copied ? "Copied message" : "Copy message"}
+      title={copied ? "Copied" : "Copy"}
+    >
+      {copied ? <CheckCircleIcon /> : <ClipboardIcon />}
+    </button>
+  );
+}
+
+function ClipboardIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="message-copy-icon">
+      <path
+        d="M15.6657 3.88789C15.3991 2.94272 14.5305 2.25 13.5 2.25H10.5C9.46954 2.25 8.60087 2.94272 8.33426 3.88789M15.6657 3.88789C15.7206 4.0825 15.75 4.28782 15.75 4.5V4.5C15.75 4.91421 15.4142 5.25 15 5.25H9C8.58579 5.25 8.25 4.91421 8.25 4.5V4.5C8.25 4.28782 8.27937 4.0825 8.33426 3.88789M15.6657 3.88789C16.3119 3.93668 16.9545 3.99828 17.5933 4.07241C18.6939 4.20014 19.5 5.149 19.5 6.25699V19.5C19.5 20.7426 18.4926 21.75 17.25 21.75H6.75C5.50736 21.75 4.5 20.7426 4.5 19.5V6.25699C4.5 5.149 5.30608 4.20014 6.40668 4.07241C7.04547 3.99828 7.68808 3.93668 8.33426 3.88789"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function CheckCircleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="message-copy-icon">
+      <path
+        d="M9 12.75L11.25 15L15 9.75M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function PermissionShieldIcon(props: { active: boolean }) {
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true" className="composer-permission-icon">
@@ -2235,6 +2338,44 @@ function renderUserInput(input: UserInput): string {
   }
 
   return `/${input.name} (${input.path})`;
+}
+
+async function copyTextToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.top = "0";
+  textarea.style.left = "0";
+  textarea.style.opacity = "0";
+  document.body.append(textarea);
+  textarea.select();
+
+  try {
+    if (!document.execCommand("copy")) {
+      throw new Error("document.execCommand('copy') returned false");
+    }
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
+
+function buildTurnAgentCopyText(items: ThreadItem[], status: TurnStatus | undefined): string {
+  if (!status || status === "inProgress") {
+    return "";
+  }
+
+  const parts = items
+    .filter((item) => item.type === "agentMessage")
+    .map((item) => asString(item.text))
+    .filter(Boolean);
+
+  return parts.join("\n\n");
 }
 
 function extractFileChangePaths(item: ThreadItem | undefined): string[] {
