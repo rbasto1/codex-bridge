@@ -1,0 +1,250 @@
+import { useEffect, useState } from "react";
+
+import { listAvailableModels } from "../client/api";
+import {
+  createComposerControlDraft,
+  findModelOption,
+  formatReasoningEffort,
+  isDangerFullAccess,
+  listModelChoices,
+  normalizeReasoningEffort,
+} from "../lib/composer";
+import { getErrorMessage } from "../lib/errors";
+import { moveThreadScopedState } from "../lib/threads";
+import type { Thread, ThreadSessionConfig } from "../shared/codex.js";
+import type {
+  ComposerAction,
+  ComposerControlDraft,
+  PermissionBaseline,
+  UseComposerStateOptions,
+} from "../types";
+
+export function useComposerState(options: UseComposerStateOptions) {
+  const {
+    activeThreadId,
+    activeTurnId,
+    backendStatus,
+    currentMode,
+    currentThread,
+    currentThreadSessionConfig,
+    currentWaitingFlags,
+    initialUi,
+    isCurrentThreadNonSteerable,
+    setActionError,
+  } = options;
+
+  const [composerDrafts, setComposerDrafts] = useState<Record<string, string>>({});
+  const [threadControlDrafts, setThreadControlDrafts] = useState<Record<string, ComposerControlDraft>>(
+    initialUi.threadControlDrafts ?? {},
+  );
+  const [threadPermissionBaselines, setThreadPermissionBaselines] = useState<Record<string, PermissionBaseline>>(
+    initialUi.threadPermissionBaselines ?? {},
+  );
+  const [availableModels, setAvailableModels] = useState<Awaited<ReturnType<typeof listAvailableModels>>>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [composerBusy, setComposerBusy] = useState(false);
+  const [focusToken, setFocusToken] = useState(0);
+
+  const composerValue = activeThreadId ? composerDrafts[activeThreadId] ?? "" : "";
+  const composerControlDraft = activeThreadId ? threadControlDrafts[activeThreadId] ?? null : null;
+  const modelChoices = composerControlDraft ? listModelChoices(availableModels, composerControlDraft.model) : [];
+  const selectedModel = composerControlDraft ? findModelOption(availableModels, composerControlDraft.model) : null;
+  const reasoningOptions = selectedModel?.supportedReasoningEfforts ?? [];
+  const isLive = currentMode === "live";
+  const waitingOnUserAction = currentWaitingFlags.includes("waitingOnApproval")
+    || currentWaitingFlags.includes("waitingOnUserInput");
+  const hasComposerText = composerValue.trim().length > 0;
+  const canCompose = Boolean(
+    currentThread && isLive && backendStatus === "ready" && !waitingOnUserAction && !isCurrentThreadNonSteerable,
+  );
+  const isStreaming = Boolean(activeTurnId) && !waitingOnUserAction;
+  const composerAction: ComposerAction = isStreaming
+    ? canCompose && hasComposerText
+      ? "steer"
+      : "stop"
+    : "send";
+  const composerActionDisabled = composerAction === "stop"
+    ? !isLive
+    : !canCompose || composerBusy || !hasComposerText;
+  const composerControlsDisabled = !currentThread || !isLive || Boolean(activeTurnId) || modelsLoading;
+
+  useEffect(() => {
+    if (backendStatus !== "ready") {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      setModelsLoading(true);
+      try {
+        const models = await listAvailableModels();
+        if (!cancelled) {
+          setAvailableModels(models);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setActionError(getErrorMessage(error));
+        }
+      } finally {
+        if (!cancelled) {
+          setModelsLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [backendStatus, setActionError]);
+
+  useEffect(() => {
+    if (!activeThreadId || !currentThreadSessionConfig || isDangerFullAccess(currentThreadSessionConfig.sandbox)) {
+      return;
+    }
+
+    setThreadPermissionBaselines((previous) => {
+      const currentBaseline = previous[activeThreadId];
+      if (
+        currentBaseline
+        && currentBaseline.approvalPolicy === currentThreadSessionConfig.approvalPolicy
+        && JSON.stringify(currentBaseline.sandbox) === JSON.stringify(currentThreadSessionConfig.sandbox)
+      ) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        [activeThreadId]: {
+          approvalPolicy: currentThreadSessionConfig.approvalPolicy,
+          sandbox: currentThreadSessionConfig.sandbox,
+        },
+      };
+    });
+  }, [activeThreadId, currentThreadSessionConfig]);
+
+  useEffect(() => {
+    if (!activeThreadId || !currentThread) {
+      return;
+    }
+
+    setThreadControlDrafts((previous) => {
+      if (previous[activeThreadId]) {
+        return previous;
+      }
+
+      const nextDraft = createComposerControlDraft(currentThreadSessionConfig, availableModels);
+      if (!nextDraft) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        [activeThreadId]: nextDraft,
+      };
+    });
+  }, [activeThreadId, availableModels, currentThread, currentThreadSessionConfig]);
+
+  function setComposerValue(value: string) {
+    if (!activeThreadId) {
+      return;
+    }
+
+    setComposerDrafts((previous) => ({
+      ...previous,
+      [activeThreadId]: value,
+    }));
+  }
+
+  function updateCurrentThreadControls(updater: (current: ComposerControlDraft) => ComposerControlDraft) {
+    if (!activeThreadId || !composerControlDraft) {
+      return;
+    }
+
+    setThreadControlDrafts((previous) => ({
+      ...previous,
+      [activeThreadId]: updater(previous[activeThreadId] ?? composerControlDraft),
+    }));
+  }
+
+  function selectComposerMode(mode: ComposerControlDraft["mode"]) {
+    updateCurrentThreadControls((current) => ({
+      ...current,
+      mode,
+    }));
+  }
+
+  function selectComposerModel(model: string) {
+    const modelOption = findModelOption(availableModels, model);
+    updateCurrentThreadControls((current) => ({
+      ...current,
+      model,
+      effort: normalizeReasoningEffort(modelOption, current.effort),
+    }));
+  }
+
+  function selectComposerEffort(effort: NonNullable<ComposerControlDraft["effort"]>) {
+    updateCurrentThreadControls((current) => ({
+      ...current,
+      effort,
+    }));
+  }
+
+  function toggleFullAccess() {
+    updateCurrentThreadControls((current) => ({
+      ...current,
+      fullAccess: !current.fullAccess,
+    }));
+  }
+
+  function moveScopedState(fromThreadId: string, toThreadId: string) {
+    setComposerDrafts((previous) => moveThreadScopedState(previous, fromThreadId, toThreadId));
+    setThreadControlDrafts((previous) => moveThreadScopedState(previous, fromThreadId, toThreadId));
+    setThreadPermissionBaselines((previous) => moveThreadScopedState(previous, fromThreadId, toThreadId));
+  }
+
+  function clearComposerDraft(targetThreadId: string, draftThreadId?: string) {
+    setComposerDrafts((previous) => {
+      const next = { ...previous, [targetThreadId]: "" };
+      if (draftThreadId && targetThreadId !== draftThreadId) {
+        delete next[draftThreadId];
+      }
+      return next;
+    });
+  }
+
+  function focusComposer() {
+    setFocusToken((value) => value + 1);
+  }
+
+  return {
+    availableModels,
+    composerAction,
+    composerActionDisabled,
+    composerBusy,
+    composerControlDraft,
+    composerControlsDisabled,
+    composerValue,
+    focusToken,
+    formatReasoningEffort,
+    hasComposerText,
+    isLive,
+    modelChoices,
+    modelsLoading,
+    reasoningOptions,
+    selectedModel,
+    threadControlDrafts,
+    threadPermissionBaselines,
+    waitingOnUserAction,
+    clearComposerDraft,
+    focusComposer,
+    moveScopedState,
+    selectComposerEffort,
+    selectComposerMode,
+    selectComposerModel,
+    setComposerBusy,
+    setComposerValue,
+    setThreadPermissionBaselines,
+    toggleFullAccess,
+  };
+}

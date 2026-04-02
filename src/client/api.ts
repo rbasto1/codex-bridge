@@ -11,66 +11,21 @@ import {
   type ThreadSessionConfig,
   type Turn,
 } from "../shared/codex.js";
-
-export type ThreadListResponse = {
-  data: Thread[];
-  nextCursor: string | null;
-};
-
-export type ThreadResponse = {
-  thread: Thread;
-};
-
-export type ThreadSessionResponse = ThreadResponse & ThreadSessionConfig & {
-  approvalsReviewer: string;
-  modelProvider: string;
-  serviceTier: string | null;
-};
-
-export type ThreadStartResponse = ThreadSessionResponse;
-export type ThreadResumeResponse = ThreadSessionResponse;
-
-export type TurnStartResponse = {
-  turn: Turn;
-};
-
-export type TurnSteerResponse = {
-  turnId: string;
-};
-
-export type TurnStartOptions = {
-  approvalPolicy?: ApprovalPolicy | null;
-  sandboxPolicy?: SandboxPolicy | null;
-  collaborationMode?: {
-    mode: CollaborationModeKind;
-    settings: {
-      model: string;
-      reasoning_effort: ReasoningEffort | null;
-      developer_instructions: string | null;
-    };
-  } | null;
-};
-
-export type ModelReasoningEffortOption = {
-  description: string;
-  reasoningEffort: ReasoningEffort;
-};
-
-export type ModelOption = {
-  id: string;
-  model: string;
-  displayName: string;
-  description: string;
-  hidden: boolean;
-  isDefault: boolean;
-  defaultReasoningEffort: ReasoningEffort;
-  supportedReasoningEfforts: ModelReasoningEffortOption[];
-};
-
-type ModelListResponse = {
-  data: ModelOption[];
-  nextCursor: string | null;
-};
+import type {
+  ModelListResponse,
+  ModelOption,
+  ProjectStateResponse,
+  ProjectStateSaveData,
+  ServerRequestResponsePayload,
+  ThreadListResponse,
+  ThreadResponse,
+  ThreadResumeResponse,
+  ThreadSessionResponse,
+  ThreadStartResponse,
+  TurnStartOptions,
+  TurnStartResponse,
+  TurnSteerResponse,
+} from "../types";
 
 export class ApiError extends Error {
   constructor(readonly rpcError: RpcError) {
@@ -220,27 +175,12 @@ export async function interruptTurn(threadId: string, turnId: string): Promise<v
   });
 }
 
-export async function respondToServerRequest(body: {
-  requestId: RequestId;
-  result?: unknown;
-  error?: RpcError;
-}): Promise<void> {
+export async function respondToServerRequest(body: ServerRequestResponsePayload): Promise<void> {
   await requestJson("/api/server-request/respond", {
     method: "POST",
     body: JSON.stringify(body),
   });
 }
-
-export type ProjectStateResponse = {
-  projects: Array<{ id: string; name: string }>;
-  hidden: string[];
-  iconIds: string[];
-};
-
-export type ProjectStateSaveData = {
-  projects: Array<{ id: string; name: string }>;
-  hidden: string[];
-};
 
 export async function fetchProjectState(): Promise<ProjectStateResponse> {
   return requestJson<ProjectStateResponse>("/api/projects/state");

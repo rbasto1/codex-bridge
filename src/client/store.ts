@@ -13,41 +13,7 @@ import {
   type ThreadSessionConfig,
   type Turn,
 } from "../shared/codex.js";
-
-export type ThreadMode = "replay" | "live";
-
-type AppStore = {
-  backendStatus: AppServerStatus;
-  initializeResponse: InitializeResponse | null;
-  stderrTail: string[];
-  lastExit: AppServerExit;
-  threadsById: Record<string, Thread>;
-  threadSessionConfigById: Record<string, ThreadSessionConfig>;
-  threadOrder: string[];
-  turnsById: Record<string, Turn>;
-  turnOrderByThreadId: Record<string, string[]>;
-  itemsById: Record<string, ThreadItem>;
-  itemOrderByTurnId: Record<string, string[]>;
-  activeThreadId: string | null;
-  threadModes: Record<string, ThreadMode>;
-  liveAttachedThreadIds: Record<string, true>;
-  activeTurnIdByThreadId: Record<string, string>;
-  pendingServerRequestsById: Record<string, BrowserServerRequest>;
-  selectedThreadError: string | null;
-  nonSteerableThreadIds: Record<string, boolean>;
-  setSnapshot: (snapshot: BackendSnapshot) => void;
-  replaceThreads: (threads: Thread[]) => void;
-  hydrateThread: (thread: Thread, mode: ThreadMode, sessionConfig?: ThreadSessionConfig | null) => void;
-  setActiveThread: (threadId: string | null) => void;
-  setSelectedThreadError: (message: string | null) => void;
-  setThreadSessionConfig: (threadId: string, sessionConfig: ThreadSessionConfig) => void;
-  updateThreadName: (threadId: string, name: string | null) => void;
-  removeThread: (threadId: string) => void;
-  noteTurn: (threadId: string, turn: Turn) => void;
-  applyNotification: (method: string, params: unknown) => void;
-  putServerRequest: (request: BrowserServerRequest) => void;
-  markNonSteerable: (threadId: string, value: boolean) => void;
-};
+import type { AppStore, ThreadMode } from "../types";
 
 export const useAppStore = create<AppStore>((set) => ({
   backendStatus: "starting",

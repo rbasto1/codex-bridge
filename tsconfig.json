@@ -15,5 +15,13 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["vite/client"]
   },
-  "include": ["src/client/**/*", "src/shared/**/*", "vite.config.ts"]
+  "include": [
+    "src/client/**/*",
+    "src/components/**/*",
+    "src/hooks/**/*",
+    "src/lib/**/*",
+    "src/shared/**/*",
+    "src/types.ts",
+    "vite.config.ts"
+  ]
 }
