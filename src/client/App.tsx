@@ -73,6 +73,8 @@ type PermissionBaseline = {
   sandbox: SandboxPolicy;
 };
 
+type ComposerAction = "send" | "steer" | "stop";
+
 export default function App() {
   const initialUi = readPersistedUi();
   const {
@@ -221,8 +223,17 @@ export default function App() {
   const reasoningOptions = selectedModel?.supportedReasoningEfforts ?? [];
   const isLive = currentMode === "live";
   const waitingOnUserAction = currentWaitingFlags.includes("waitingOnApproval") || currentWaitingFlags.includes("waitingOnUserInput");
+  const hasComposerText = composerValue.trim().length > 0;
   const canCompose = Boolean(currentThread && isLive && backendStatus === "ready" && !waitingOnUserAction && !isCurrentThreadNonSteerable);
   const isStreaming = Boolean(activeTurnId) && !waitingOnUserAction;
+  const composerAction = isStreaming
+    ? canCompose && hasComposerText
+      ? "steer"
+      : "stop"
+    : "send";
+  const composerActionDisabled = composerAction === "stop"
+    ? !isLive
+    : !canCompose || composerBusy || !hasComposerText;
   const composerControlsDisabled = !currentThread || !isLive || Boolean(activeTurnId) || modelsLoading;
 
   useEffect(() => {
@@ -1267,9 +1278,6 @@ export default function App() {
                   ) : null}
                 </section>
 
-                {activeTurnId && !waitingOnUserAction ? (
-                  <section className="banner info-banner">The active turn is running. New composer submits will steer the current turn.</section>
-                ) : null}
                 {waitingOnUserAction ? (
                   <section className="banner info-banner">Resolve the pending approval or tool input before sending more guidance.</section>
                 ) : null}
@@ -1310,23 +1318,19 @@ export default function App() {
                       <button
                         type="button"
                         className="composer-submit-button"
-                        disabled={isStreaming ? !isLive : !canCompose || composerBusy || !composerValue.trim()}
+                        disabled={composerActionDisabled}
                         onClick={() => {
-                          if (isStreaming) {
+                          if (composerAction === "stop") {
                             void handleInterruptTurn();
                             return;
                           }
 
                           void handleSubmitComposer();
                         }}
-                        title={isStreaming ? "Stop turn" : "Send"}
-                        aria-label={isStreaming ? "Stop turn" : "Send"}
+                        title={composerAction === "stop" ? "Stop turn" : composerAction === "steer" ? "Send and steer" : "Send"}
+                        aria-label={composerAction === "stop" ? "Stop turn" : composerAction === "steer" ? "Send and steer" : "Send"}
                       >
-                        {isStreaming ? (
-                          <svg fill="none" viewBox="0 0 20 20" width="16" height="16"><rect x="5" y="5" width="10" height="10" fill="currentColor"/></svg>
-                        ) : (
-                          <svg fill="none" viewBox="0 0 20 20" width="16" height="16"><path fillRule="evenodd" clipRule="evenodd" d="M9.99991 2.24121L16.0921 8.33343L15.2083 9.21731L10.6249 4.63397V17.5001H9.37492V4.63398L4.7916 9.21731L3.90771 8.33343L9.99991 2.24121Z" fill="currentColor"/></svg>
-                        )}
+                        <ComposerActionIcon action={composerAction} />
                       </button>
                     </div>
                     {composerControlDraft ? (
@@ -2159,6 +2163,53 @@ function CheckCircleIcon() {
         strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ComposerActionIcon(props: { action: ComposerAction }) {
+  if (props.action === "stop") {
+    return (
+      <svg fill="none" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+        <rect x="5" y="5" width="10" height="10" fill="currentColor" />
+      </svg>
+    );
+  }
+
+  if (props.action === "steer") {
+    return (
+      <svg fill="none" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+        <path
+          d="M10 2.25 16.1 8.35 15.22 9.24 10.63 4.65v7.85H9.38V4.65L4.78 9.24l-.88-.88L10 2.25Z"
+          fill="currentColor"
+        />
+        <path
+          d="M3.75 14.25c0-1.66 1.34-3 3-3h3"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.25"
+          strokeLinecap="round"
+        />
+        <path
+          d="M7.75 10.25 10.75 11.25 7.75 12.25"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.25"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  return (
+    <svg fill="none" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M9.99991 2.24121L16.0921 8.33343L15.2083 9.21731L10.6249 4.63397V17.5001H9.37492V4.63398L4.7916 9.21731L3.90771 8.33343L9.99991 2.24121Z"
+        fill="currentColor"
       />
     </svg>
   );
