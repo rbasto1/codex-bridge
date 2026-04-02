@@ -42,6 +42,7 @@ type AppStore = {
   setSelectedThreadError: (message: string | null) => void;
   setThreadSessionConfig: (threadId: string, sessionConfig: ThreadSessionConfig) => void;
   updateThreadName: (threadId: string, name: string | null) => void;
+  removeThread: (threadId: string) => void;
   noteTurn: (threadId: string, turn: Turn) => void;
   applyNotification: (method: string, params: unknown) => void;
   putServerRequest: (request: BrowserServerRequest) => void;
@@ -190,6 +191,64 @@ export const useAppStore = create<AppStore>((set) => ({
             name,
           },
         },
+      };
+    });
+  },
+
+  removeThread: (threadId) => {
+    set((state) => {
+      if (!state.threadsById[threadId]) {
+        return state;
+      }
+
+      const threadsById = { ...state.threadsById };
+      delete threadsById[threadId];
+
+      const threadSessionConfigById = { ...state.threadSessionConfigById };
+      delete threadSessionConfigById[threadId];
+
+      const threadModes = { ...state.threadModes };
+      delete threadModes[threadId];
+
+      const liveAttachedThreadIds = { ...state.liveAttachedThreadIds };
+      delete liveAttachedThreadIds[threadId];
+
+      const activeTurnIdByThreadId = { ...state.activeTurnIdByThreadId };
+      delete activeTurnIdByThreadId[threadId];
+
+      const nonSteerableThreadIds = { ...state.nonSteerableThreadIds };
+      delete nonSteerableThreadIds[threadId];
+
+      const turnOrderByThreadId = { ...state.turnOrderByThreadId };
+      const turnIds = turnOrderByThreadId[threadId] ?? [];
+      delete turnOrderByThreadId[threadId];
+
+      const turnsById = { ...state.turnsById };
+      const itemOrderByTurnId = { ...state.itemOrderByTurnId };
+      const itemsById = { ...state.itemsById };
+
+      for (const turnId of turnIds) {
+        delete turnsById[turnId];
+        const itemIds = itemOrderByTurnId[turnId] ?? [];
+        delete itemOrderByTurnId[turnId];
+        for (const itemId of itemIds) {
+          delete itemsById[itemId];
+        }
+      }
+
+      return {
+        threadsById,
+        threadSessionConfigById,
+        threadOrder: sortThreadOrder(threadsById),
+        turnsById,
+        turnOrderByThreadId,
+        itemsById,
+        itemOrderByTurnId,
+        activeThreadId: state.activeThreadId === threadId ? null : state.activeThreadId,
+        threadModes,
+        liveAttachedThreadIds,
+        activeTurnIdByThreadId,
+        nonSteerableThreadIds,
       };
     });
   },

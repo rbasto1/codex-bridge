@@ -40,6 +40,7 @@ import {
   type CollaborationModeKind,
   type ReasoningEffort,
   type SandboxPolicy,
+  type Thread,
   type ThreadItem,
   type ThreadSessionConfig,
   type UserInput,
@@ -101,6 +102,7 @@ export default function App() {
     markNonSteerable,
     noteTurn,
     putServerRequest,
+    removeThread,
     replaceThreads,
     setSelectedThreadError,
     setSnapshot,
@@ -113,6 +115,7 @@ export default function App() {
       markNonSteerable: state.markNonSteerable,
       noteTurn: state.noteTurn,
       putServerRequest: state.putServerRequest,
+      removeThread: state.removeThread,
       replaceThreads: state.replaceThreads,
       setSelectedThreadError: state.setSelectedThreadError,
       setSnapshot: state.setSnapshot,
@@ -140,6 +143,7 @@ export default function App() {
   const isCurrentThreadNonSteerable = useAppStore((state) =>
     state.activeThreadId ? Boolean(state.nonSteerableThreadIds[state.activeThreadId]) : false,
   );
+  const currentThreadIsUiDraft = isUiOnlyThread(currentThread);
 
   const isMobile = () => window.innerWidth < 768;
   const [sidebarCollapsed, setSidebarCollapsed] = useState(isMobile);
@@ -165,7 +169,6 @@ export default function App() {
   const [listLoading, setListLoading] = useState(false);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [threadLoadingId, setThreadLoadingId] = useState<string | null>(null);
-  const [isStartingThread, setIsStartingThread] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [composerBusy, setComposerBusy] = useState(false);
   const [respondingRequestKey, setRespondingRequestKey] = useState<string | null>(null);
@@ -537,6 +540,22 @@ export default function App() {
   }, [hydrateThread, initialUi.activeMode, initialUi.activeThreadId, selectionRestored, setSelectedThreadError, threadOrder.length, threadsById]);
 
   async function openThread(threadId: string, mode: "replay" | "live") {
+    const thread = useAppStore.getState().threadsById[threadId];
+    if (isUiOnlyThread(thread)) {
+      if (isMobile()) {
+        setSidebarCollapsed(true);
+      }
+
+      focusComposerAfterLoadRef.current = true;
+      setActionError(null);
+      setSelectedThreadError(null);
+      startTransition(() => {
+        hydrateThread(thread, "live", useAppStore.getState().threadSessionConfigById[threadId] ?? null);
+      });
+      window.history.replaceState(null, "", window.location.pathname);
+      return;
+    }
+
     setThreadLoadingId(threadId);
     setActionError(null);
     setSelectedThreadError(null);
@@ -757,22 +776,20 @@ export default function App() {
       return;
     }
 
-    setIsStartingThread(true);
     setActionError(null);
+    setSelectedThreadError(null);
+    focusComposerAfterLoadRef.current = true;
+    setCurrentProject(cwd);
+    setCustomProjects((previous) => (previous.includes(cwd) ? previous : [...previous, cwd]));
 
-    try {
-      const response = await startThread(cwd);
-      focusComposerAfterLoadRef.current = true;
-      setCurrentProject(cwd);
-      setCustomProjects((previous) => (previous.includes(cwd) ? previous : [...previous, cwd]));
-      startTransition(() => {
-        hydrateThread(response.thread, "live", extractThreadSessionConfig(response));
-      });
-    } catch (error) {
-      setActionError(getErrorMessage(error));
-    } finally {
-      setIsStartingThread(false);
+    if (isMobile()) {
+      setSidebarCollapsed(true);
     }
+
+    startTransition(() => {
+      hydrateThread(createUiDraftThread(cwd), "live", null);
+    });
+    window.history.replaceState(null, "", window.location.pathname);
   }
 
   async function handleRenameThread() {
@@ -789,6 +806,14 @@ export default function App() {
     }
 
     if (nextName === originalTitle) {
+      setIsEditingTitle(false);
+      return;
+    }
+
+    if (isUiOnlyThread(currentThread)) {
+      startTransition(() => {
+        updateThreadName(currentThread.id, nextName);
+      });
       setIsEditingTitle(false);
       return;
     }
@@ -829,6 +854,9 @@ export default function App() {
       return;
     }
 
+    const draftThreadId = activeThreadId;
+    const isUiDraft = isUiOnlyThread(currentThread);
+    const draftThreadName = currentThread.name?.trim() ?? "";
     const permissionBaseline = resolvePermissionBaseline(threadPermissionBaselines[activeThreadId], currentThreadSessionConfig);
     const nextThreadSessionConfig = buildThreadSessionConfig(
       currentThread.cwd,
@@ -836,15 +864,39 @@ export default function App() {
       permissionBaseline,
       findModelOption(availableModels, composerControlDraft.model),
     );
+    let targetThreadId = activeThreadId;
 
     setComposerBusy(true);
     setActionError(null);
 
     try {
-      if (activeTurnId) {
-        await steerTurn(activeThreadId, activeTurnId, [createTextInput(text)]);
+      if (isUiDraft) {
+        const response = await startThread(currentThread.cwd);
+        targetThreadId = response.thread.id;
+
+        setComposerDrafts((previous) => moveThreadScopedState(previous, draftThreadId, targetThreadId));
+        setThreadControlDrafts((previous) => moveThreadScopedState(previous, draftThreadId, targetThreadId));
+        setThreadPermissionBaselines((previous) => moveThreadScopedState(previous, draftThreadId, targetThreadId));
+
+        startTransition(() => {
+          hydrateThread(response.thread, "live", extractThreadSessionConfig(response));
+          if (draftThreadName) {
+            updateThreadName(targetThreadId, draftThreadName);
+          }
+          removeThread(draftThreadId);
+        });
+
+        if (draftThreadName) {
+          void renameThread(targetThreadId, draftThreadName).catch(() => {
+            // Keep the local draft title if persisting it fails.
+          });
+        }
+      }
+
+      if (activeTurnId && !isUiDraft) {
+        await steerTurn(targetThreadId, activeTurnId, [createTextInput(text)]);
       } else {
-        const response = await startTurn(activeThreadId, [createTextInput(text)], {
+        const response = await startTurn(targetThreadId, [createTextInput(text)], {
           approvalPolicy: nextThreadSessionConfig.approvalPolicy,
           sandboxPolicy: nextThreadSessionConfig.sandbox,
           collaborationMode: {
@@ -857,17 +909,17 @@ export default function App() {
           },
         });
         startTransition(() => {
-          noteTurn(activeThreadId, response.turn);
-          markNonSteerable(activeThreadId, false);
-          setThreadSessionConfig(activeThreadId, nextThreadSessionConfig);
+          noteTurn(targetThreadId, response.turn);
+          markNonSteerable(targetThreadId, false);
+          setThreadSessionConfig(targetThreadId, nextThreadSessionConfig);
         });
 
         // Auto-generate session name on first turn (fire-and-forget).
-        if (!currentThread.name) {
-          generateThreadName(activeThreadId, text).then(
+        if (!draftThreadName) {
+          generateThreadName(targetThreadId, text).then(
             (result) => {
               if (result.name) {
-                updateThreadName(activeThreadId, result.name);
+                updateThreadName(targetThreadId, result.name);
               }
             },
             () => {/* silent — name generation is best-effort */},
@@ -875,14 +927,17 @@ export default function App() {
         }
       }
 
-      setComposerDrafts((previous) => ({
-        ...previous,
-        [activeThreadId]: "",
-      }));
+      setComposerDrafts((previous) => {
+        const next = { ...previous, [targetThreadId]: "" };
+        if (targetThreadId !== draftThreadId) {
+          delete next[draftThreadId];
+        }
+        return next;
+      });
     } catch (error) {
-      if (activeThreadId && looksNonSteerable(error)) {
+      if (targetThreadId && looksNonSteerable(error)) {
         startTransition(() => {
-          markNonSteerable(activeThreadId, true);
+          markNonSteerable(targetThreadId, true);
         });
       }
 
@@ -1101,9 +1156,9 @@ export default function App() {
             type="button"
             className="sidebar-new-session"
             onClick={() => void handleStartThread()}
-            disabled={backendStatus !== "ready" || isStartingThread}
+            disabled={backendStatus !== "ready"}
           >
-            {isStartingThread ? "Starting..." : "New Session"}
+            New Session
           </button>
 
           <input
@@ -1192,19 +1247,23 @@ export default function App() {
                     </div>
 
                     <div className="thread-meta-row">
-                      <span className={`badge ${isLive ? "badge-live" : "badge-replay"}`}>{isLive ? "Live attached" : "Replay only"}</span>
+                      <span className={`badge ${currentThreadIsUiDraft || isLive ? "badge-live" : "badge-replay"}`}>
+                        {currentThreadIsUiDraft ? "Draft session" : isLive ? "Live attached" : "Replay only"}
+                      </span>
                       <span className="badge">{formatSessionSource(currentThread.source)}</span>
                     </div>
                   </div>
 
-                  <div className="thread-header-actions">
-                    <button type="button" className="button secondary" onClick={() => void openThread(currentThread.id, "replay")}>
-                      Refresh replay
-                    </button>
-                    <button type="button" className="button primary" onClick={() => void openThread(currentThread.id, "live")} disabled={threadLoadingId === currentThread.id}>
-                      {isLive ? "Live attached" : threadLoadingId === currentThread.id ? "Attaching..." : "Resume live"}
-                    </button>
-                  </div>
+                  {!currentThreadIsUiDraft ? (
+                    <div className="thread-header-actions">
+                      <button type="button" className="button secondary" onClick={() => void openThread(currentThread.id, "replay")}>
+                        Refresh replay
+                      </button>
+                      <button type="button" className="button primary" onClick={() => void openThread(currentThread.id, "live")} disabled={threadLoadingId === currentThread.id}>
+                        {isLive ? "Live attached" : threadLoadingId === currentThread.id ? "Attaching..." : "Resume live"}
+                      </button>
+                    </div>
+                  ) : null}
                 </section>
 
                 {activeTurnId && !waitingOnUserAction ? (
@@ -2245,6 +2304,48 @@ function formatProjectTileLabel(project: string) {
   }
 
   return baseName.slice(0, 2).toUpperCase();
+}
+
+function createUiDraftThread(cwd: string): Thread {
+  const timestampSeconds = Math.floor(Date.now() / 1000);
+
+  return {
+    id: `ui-draft:${crypto.randomUUID()}`,
+    preview: "New session",
+    ephemeral: false,
+    modelProvider: "local",
+    createdAt: timestampSeconds,
+    updatedAt: timestampSeconds,
+    status: { type: "idle" },
+    path: null,
+    cwd,
+    cliVersion: "",
+    source: "frontend draft",
+    agentNickname: null,
+    agentRole: null,
+    gitInfo: null,
+    name: null,
+    turns: [],
+    uiOnly: true,
+  };
+}
+
+function isUiOnlyThread(thread: Thread | null | undefined): thread is Thread & { uiOnly: true } {
+  return Boolean(thread?.uiOnly);
+}
+
+function moveThreadScopedState<T>(
+  state: Record<string, T>,
+  fromThreadId: string,
+  toThreadId: string,
+): Record<string, T> {
+  if (fromThreadId === toThreadId || !(fromThreadId in state)) {
+    return state;
+  }
+
+  const next = { ...state, [toThreadId]: state[fromThreadId] };
+  delete next[fromThreadId];
+  return next;
 }
 
 function safeSocketEvent(raw: string): BrowserEvent | null {

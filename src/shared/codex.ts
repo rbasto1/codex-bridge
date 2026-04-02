@@ -123,6 +123,7 @@ export type Thread = {
   gitInfo: unknown | null;
   name: string | null;
   turns: Turn[];
+  uiOnly?: boolean;
 };
 
 export function serializeRequestId(requestId: RequestId): string {
