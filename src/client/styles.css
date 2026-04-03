@@ -511,7 +511,7 @@ button {
 }
 
 .session-indicator.running {
-  background: var(--color-brand);
+  background: var(--color-success);
   animation: session-pulse 1.2s ease-in-out infinite;
 }
 
@@ -537,10 +537,6 @@ button {
 
 .session-indicator.unread {
   background: var(--color-interactive);
-}
-
-.session-row.active .session-indicator.running {
-  background: var(--color-success);
 }
 
 @keyframes session-pulse {
