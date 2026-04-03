@@ -15,6 +15,7 @@ import {
 } from "./api";
 import { playSessionCompleteSound } from "./sessionCompleteSound";
 import { useAppStore } from "./store";
+import { AuthModal } from "../components/AuthModal";
 import {
   createTextInput,
   type BrowserServerRequest,
@@ -25,6 +26,7 @@ import { ScrollViewport } from "../components/ScrollViewport";
 import { ThreadComposer } from "../components/ThreadComposer";
 import { ThreadHeader } from "../components/ThreadHeader";
 import { TranscriptView } from "../components/TranscriptView";
+import { useAuth } from "../hooks/useAuth";
 import { useBackendInitialization } from "../hooks/useBackendInitialization";
 import { useComposerState } from "../hooks/useComposerState";
 import { usePersistedUi } from "../hooks/usePersistedUi";
@@ -113,10 +115,16 @@ export default function App() {
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [respondingRequestKey, setRespondingRequestKey] = useState<string | null>(null);
-  const [selectionRestored, setSelectionRestored] = useState(false);
+  const selectionRestoredRef = useRef(false);
   const [threadLoadingId, setThreadLoadingId] = useState<string | null>(null);
   const [draftThreadsRestored, setDraftThreadsRestored] = useState(false);
   const currentThreadIsUiDraft = isUiOnlyThread(currentThread);
+  const { authBlocked, authBootstrapped, authError, submitAuthToken } = useAuth({
+    clearErrors: () => {
+      setActionError(null);
+      setSelectedThreadError(null);
+    },
+  });
 
   const composer = useComposerState({
     activeThreadId,
@@ -180,16 +188,20 @@ export default function App() {
       for (const threadId of threadIds) {
         const previousActiveTurnId = previousState.activeTurnIdByThreadId[threadId] ?? null;
         const currentActiveTurnId = state.activeTurnIdByThreadId[threadId] ?? null;
-        if (previousActiveTurnId === null) {
+        if (!previousActiveTurnId || currentActiveTurnId) {
           continue;
         }
-        if (currentActiveTurnId === null && state.liveAttachedThreadIds[threadId] === true) {
-          const completedTurn = state.turnsById[previousActiveTurnId];
-          if (completedTurn?.status === "completed") {
-            playSessionCompleteSound();
-            break;
-          }
+        if (!state.liveAttachedThreadIds[threadId]) {
+          continue;
         }
+
+        const completedTurn = state.turnsById[previousActiveTurnId];
+        if (completedTurn?.status !== "completed") {
+          continue;
+        }
+
+        playSessionCompleteSound();
+        break;
       }
     });
   }, []);
@@ -205,6 +217,7 @@ export default function App() {
 
   const { listLoading } = useBackendInitialization({
     backendStatus,
+    enabled: authBootstrapped && !authBlocked,
     replaceThreads,
     setActionError,
     setSnapshot,
@@ -255,11 +268,11 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if (selectionRestored || threadOrder.length === 0) {
+    if (selectionRestoredRef.current || threadOrder.length === 0) {
       return;
     }
 
-    setSelectionRestored(true);
+    selectionRestoredRef.current = true;
 
     const hashThreadId = window.location.hash.replace(/^#/, "") || null;
     const restoreThreadId = (hashThreadId && threadsById[hashThreadId]) ? hashThreadId : initialUi.activeThreadId;
@@ -270,7 +283,7 @@ export default function App() {
         : (initialUi.activeMode ?? "replay");
       void openThreadRef.current?.(restoreThreadId, mode);
     }
-  }, [initialUi.activeMode, initialUi.activeThreadId, selectionRestored, threadOrder.length, threadsById]);
+  }, [initialUi.activeMode, initialUi.activeThreadId, threadOrder.length, threadsById]);
 
   async function handleStartThread() {
     const cwd = projectManager.currentProject.trim();
@@ -570,17 +583,8 @@ export default function App() {
           </section>
         )}
       </main>
+
+      {authBlocked ? <AuthModal errorMessage={authError} onSubmit={submitAuthToken} /> : null}
     </div>
   );
 }
-import { AuthModal } from "../components/AuthModal";
-import { useAuth } from "../hooks/useAuth";
-  const { authBlocked, authBootstrapped, authError, submitAuthToken } = useAuth({
-    clearErrors: () => {
-      setActionError(null);
-      setSelectedThreadError(null);
-    },
-  });
-    enabled: authBootstrapped && !authBlocked,
-
-      {authBlocked ? <AuthModal errorMessage={authError} onSubmit={submitAuthToken} /> : null}
