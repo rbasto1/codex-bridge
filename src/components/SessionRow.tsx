@@ -12,6 +12,7 @@ export function SessionRow(props: SessionRowProps) {
 
   const isRunning = thread.status.type === "active";
   const showDone = done && !isRunning;
+  const indicatorState = isRunning ? "running" : showUnread ? "unread" : showDone ? "done" : "idle";
 
   return (
     <button
@@ -20,22 +21,24 @@ export function SessionRow(props: SessionRowProps) {
       onClick={onOpen}
       title={thread.cwd}
     >
-      <span className={`session-indicator ${isRunning ? "running" : showDone ? "done" : showUnread ? "unread" : "idle"}`} />
+      <span className={`session-indicator ${indicatorState}`} />
       <div className="session-info">
-        <span className={`session-name ${showDone ? "done" : ""}`}>{thread.name?.trim() || thread.preview || thread.id}</span>
-        <span className="session-meta">
-          {formatRelativeTime(thread.updatedAt)}
+        <span className="session-title-row">
+          <span className={`session-name ${showDone ? "done" : ""}`}>{thread.name?.trim() || thread.preview || thread.id}</span>
           <button
             type="button"
-            className="session-done-toggle"
+            className={`session-done-toggle ${showDone ? "done" : ""}`}
             onClick={(event) => {
               event.stopPropagation();
               onToggleDone();
             }}
+            title={done ? "Mark as not done" : "Mark as done"}
+            aria-label={done ? "Mark as not done" : "Mark as done"}
           >
-            {done ? "Mark as not done" : "Mark as done"}
+            <span aria-hidden="true">✓</span>
           </button>
         </span>
+        <span className="session-meta">{formatRelativeTime(thread.updatedAt)}</span>
       </div>
     </button>
   );

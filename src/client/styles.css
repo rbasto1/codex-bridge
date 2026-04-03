@@ -148,7 +148,7 @@ button {
 /* ── App layout ────────────────────────────────── */
 .app-shell {
   display: flex;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: var(--bg-base);
 }
@@ -159,7 +159,7 @@ button {
   width: 340px;
   min-width: 340px;
   flex-shrink: 0;
-  height: 100vh;
+  height: 100dvh;
   background: var(--bg-strong);
   border-right: 1px solid var(--border-weak);
   overflow: hidden;
@@ -474,6 +474,9 @@ button {
 .session-indicator {
   width: 6px;
   height: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
   border-radius: 50%;
   margin-top: 4px;
@@ -489,7 +492,18 @@ button {
 }
 
 .session-indicator.done {
-  background: var(--color-success);
+  width: 14px;
+  height: 14px;
+  margin-top: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-success);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.session-indicator.done::before {
+  content: "\2713";
 }
 
 .session-indicator.unread {
@@ -507,6 +521,13 @@ button {
   display: flex;
   flex-direction: column;
   gap: 1px;
+}
+
+.session-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .session-name {
@@ -527,7 +548,6 @@ button {
 .session-meta {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
   font-size: 12px;
   color: var(--text-weaker);
   white-space: nowrap;
@@ -536,15 +556,30 @@ button {
 }
 
 .session-done-toggle {
-  border: none;
+  margin-left: auto;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  border-radius: 999px;
   background: transparent;
-  color: var(--text-weak);
-  font-size: 11px;
+  color: var(--text-weaker);
+  font-size: 12px;
+  line-height: 1;
   padding: 0;
 }
 
 .session-done-toggle:hover {
   color: var(--text-base);
+  border-color: var(--border-weak);
+  background: var(--surface-base-hover);
+}
+
+.session-done-toggle.done {
+  color: var(--color-success);
 }
 
 /* session-time removed — time now shown in session-meta */
@@ -1433,7 +1468,7 @@ details[open] > .collapsible-summary::before {
     z-index: 50;
     width: min(340px, 85vw);
     min-width: 0;
-    height: 100vh;
+    height: 100dvh;
     transform: translateX(0);
     transition: transform 0.2s ease-out;
   }
@@ -1466,8 +1501,7 @@ details[open] > .collapsible-summary::before {
   .thread-title-row,
   .thread-header,
   .approval-actions,
-  .composer-actions,
-  .composer-control-row {
+  .composer-actions {
     flex-direction: column;
     align-items: stretch;
   }
@@ -1485,17 +1519,52 @@ details[open] > .collapsible-summary::before {
     padding: 0 16px;
   }
 
+  .composer-shell {
+    padding: 12px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .composer-control-row {
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+  }
+
   .composer-mode-toggle {
-    width: 100%;
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 0;
+  }
+
+  .composer-effort-select-shell {
+    width: auto;
+    min-width: 0;
   }
 
   .composer-mode-button {
-    flex: 1 1 0;
+    min-width: 60px;
+    padding: 6px 10px;
+    font-size: 12px;
   }
 
-  .composer-model-select-shell,
+  .composer-model-select-shell {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
   .composer-effort-select-shell {
-    width: 100%;
+    flex: 0 0 104px;
+  }
+
+  .composer-control-select {
+    height: 34px;
+    padding-right: 28px;
+    font-size: 12px;
+  }
+
+  .composer-permission-button {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
   }
 }
 
