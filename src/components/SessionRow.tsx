@@ -25,6 +25,9 @@ export function SessionRow(props: SessionRowProps) {
       <div className="session-info">
         <span className="session-title-row">
           <span className={`session-name ${showDone ? "done" : ""}`}>{thread.name?.trim() || thread.preview || thread.id}</span>
+        </span>
+        <span className="session-meta">
+          {formatRelativeTime(thread.updatedAt)}
           <button
             type="button"
             className={`session-done-toggle ${showDone ? "done" : ""}`}
@@ -38,7 +41,6 @@ export function SessionRow(props: SessionRowProps) {
             <span aria-hidden="true">✓</span>
           </button>
         </span>
-        <span className="session-meta">{formatRelativeTime(thread.updatedAt)}</span>
       </div>
     </button>
   );
