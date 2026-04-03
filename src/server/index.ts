@@ -1,4 +1,5 @@
-import { createServer } from "node:http";
+import { createServer, type IncomingMessage } from "node:http";
+import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,9 +8,12 @@ import express, { type Request, type Response } from "express";
 import { WebSocket, WebSocketServer } from "ws";
 
 import { CodexAppServerBridge, RpcResponseError } from "./codexAppServer.js";
+import { AUTH_COOKIE_NAME, AUTH_QUERY_PARAM } from "../shared/auth.js";
 import { isRecord, type RequestId, type RpcError } from "../shared/codex.js";
 
 const PORT = Number(process.env.SERVER_PORT ?? process.env.PORT ?? 4095);
+const AUTH_DISABLED = ["1", "true"].includes((process.env.AUTH_DISABLED ?? "").trim().toLowerCase());
+const AUTH_TOKEN = AUTH_DISABLED ? null : resolveAuthToken();
 const RPC_METHODS = [
   "thread/start",
   "thread/resume",
@@ -27,6 +31,19 @@ const bridge = new CodexAppServerBridge();
 const app = express();
 const DEFAULT_PROJECT_STATE = { projects: [], hidden: [], tags: [{ name: "done", color: "#22c55e" }] };
 const DEFAULT_PROJECT_SESSION_STATE = { threads: {} };
+
+if (AUTH_TOKEN) {
+  console.log(`Auth enabled. Open http://127.0.0.1:${PORT}/?${AUTH_QUERY_PARAM}=${encodeURIComponent(AUTH_TOKEN)}`);
+}
+
+app.use("/api", (request, response, next) => {
+  if (isAuthorized(request)) {
+    next();
+    return;
+  }
+
+  response.status(401).json({ error: { code: -32001, message: "Unauthorized." } });
+});
 
 function getThreadTitleGenerationConfig() {
   const openAiApiKey = process.env.OPENAI_API_KEY?.trim();
@@ -373,6 +390,12 @@ server.on("upgrade", (request, socket, head) => {
     return;
   }
 
+  if (!isAuthorized(request)) {
+    socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
+    socket.destroy();
+    return;
+  }
+
   wss.handleUpgrade(request, socket, head, (ws) => {
     wss.emit("connection", ws, request);
   });
@@ -441,6 +464,45 @@ function sendSocketEvent(socket: WebSocket, event: unknown): void {
   }
 
   socket.send(JSON.stringify(event));
+}
+
+function resolveAuthToken(): string {
+  const configuredToken = process.env.AUTH_TOKEN?.trim();
+  if (configuredToken) {
+    return configuredToken;
+  }
+
+  return randomBytes(12).toString("base64url");
+}
+
+function isAuthorized(request: Request | IncomingMessage): boolean {
+  if (!AUTH_TOKEN) {
+    return true;
+  }
+
+  return readCookie(request.headers.cookie, AUTH_COOKIE_NAME) === AUTH_TOKEN;
+}
+
+function readCookie(cookieHeader: string | undefined, name: string): string | null {
+  if (!cookieHeader) {
+    return null;
+  }
+
+  for (const entry of cookieHeader.split(";")) {
+    const separatorIndex = entry.indexOf("=");
+    if (separatorIndex === -1) {
+      continue;
+    }
+
+    const cookieName = entry.slice(0, separatorIndex).trim();
+    if (cookieName !== name) {
+      continue;
+    }
+
+    return decodeURIComponent(entry.slice(separatorIndex + 1).trim());
+  }
+
+  return null;
 }
 
 function isRpcError(value: unknown): value is RpcError {

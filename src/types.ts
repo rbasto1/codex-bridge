@@ -339,6 +339,11 @@ export interface EditProjectModalProps {
   projectDisplayName: string;
 }
 
+export interface AuthModalProps {
+  errorMessage: string | null;
+  onSubmit: (token: string) => void;
+}
+
 export interface ProjectSidebarSession {
   id: string;
   cwd: string;
@@ -361,9 +366,21 @@ export interface ServerRequestResponsePayload {
 
 export interface UseBackendInitializationOptions {
   backendStatus: AppServerStatus;
+  enabled: boolean;
   replaceThreads: (threads: Thread[]) => void;
   setActionError: (message: string | null) => void;
   setSnapshot: (snapshot: BackendSnapshot) => void;
+}
+
+export interface UseAuthOptions {
+  clearErrors: () => void;
+}
+
+export interface UseAuthResult {
+  authBlocked: boolean;
+  authBootstrapped: boolean;
+  authError: string | null;
+  submitAuthToken: (token: string) => void;
 }
 
 export interface UseProjectManagerOptions {

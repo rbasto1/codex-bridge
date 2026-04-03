@@ -1943,3 +1943,18 @@ details[open] > .collapsible-summary::before {
   border-top: 2px solid var(--border-selected, #034cff);
   margin-top: -2px;
 }
+.auth-modal-backdrop {
+  z-index: 400;
+}
+
+.modal-text {
+  margin: 0 0 12px;
+  color: var(--text-base);
+}
+
+.modal-error {
+  margin: 12px 0 0;
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+}
+

@@ -35,6 +35,14 @@ export class ApiError extends Error {
   }
 }
 
+export class UnauthorizedError extends Error {
+  constructor() {
+    super("Unauthorized.");
+  }
+}
+
+const AUTH_REQUIRED_EVENT = "codex-auth-required";
+
 export async function fetchInit(): Promise<BackendSnapshot> {
   return requestJson<BackendSnapshot>("/api/init");
 }
@@ -214,7 +222,7 @@ export function projectIconUrl(projectId: string): string {
 }
 
 export async function uploadProjectIcon(projectId: string, pngBlob: Blob): Promise<void> {
-  await fetch(`/api/projects/icons/${encodeURIComponent(projectId)}`, {
+  await request(`/api/projects/icons/${encodeURIComponent(projectId)}`, {
     method: "POST",
     headers: { "Content-Type": "image/png" },
     body: pngBlob,
@@ -222,13 +230,23 @@ export async function uploadProjectIcon(projectId: string, pngBlob: Blob): Promi
 }
 
 export async function deleteProjectIcon(projectId: string): Promise<void> {
-  await fetch(`/api/projects/icons/${encodeURIComponent(projectId)}`, {
+  await request(`/api/projects/icons/${encodeURIComponent(projectId)}`, {
     method: "DELETE",
   });
 }
 
+export function notifyAuthRequired(): void {
+  window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT));
+}
+
+export function subscribeToAuthRequired(listener: () => void): () => void {
+  const handler = () => listener();
+  window.addEventListener(AUTH_REQUIRED_EVENT, handler);
+  return () => window.removeEventListener(AUTH_REQUIRED_EVENT, handler);
+}
+
 async function requestJson<T = unknown>(input: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(input, {
+  const response = await request(input, {
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -248,6 +266,16 @@ async function requestJson<T = unknown>(input: string, init: RequestInit = {}): 
   }
 
   return parsed as T;
+}
+
+async function request(input: string, init: RequestInit = {}): Promise<Response> {
+  const response = await fetch(input, init);
+  if (response.status === 401) {
+    notifyAuthRequired();
+    throw new UnauthorizedError();
+  }
+
+  return response;
 }
 
 function safeJsonParse(text: string): unknown {

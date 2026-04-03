@@ -548,3 +548,14 @@ export default function App() {
     </div>
   );
 }
+import { AuthModal } from "../components/AuthModal";
+import { useAuth } from "../hooks/useAuth";
+  const { authBlocked, authBootstrapped, authError, submitAuthToken } = useAuth({
+    clearErrors: () => {
+      setActionError(null);
+      setSelectedThreadError(null);
+    },
+  });
+    enabled: authBootstrapped && !authBlocked,
+
+      {authBlocked ? <AuthModal errorMessage={authError} onSubmit={submitAuthToken} /> : null}

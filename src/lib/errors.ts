@@ -1,6 +1,10 @@
-import { ApiError } from "../client/api";
+import { ApiError, UnauthorizedError } from "../client/api";
 
 export function getErrorMessage(error: unknown): string {
+  if (error instanceof UnauthorizedError) {
+    return "";
+  }
+
   if (error instanceof ApiError) {
     return error.message;
   }

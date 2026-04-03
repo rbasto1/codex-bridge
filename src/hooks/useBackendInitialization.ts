@@ -1,16 +1,26 @@
 import { startTransition, useEffect, useState } from "react";
 
-import { fetchInit, listAllThreads } from "../client/api";
+import { UnauthorizedError, fetchInit, listAllThreads } from "../client/api";
 import { getErrorMessage } from "../lib/errors";
 import { safeSocketEvent } from "../lib/socket";
 import { useAppStore } from "../client/store";
 import type { UseBackendInitializationOptions } from "../types";
 
 export function useBackendInitialization(options: UseBackendInitializationOptions) {
-  const { backendStatus, replaceThreads, setActionError, setSnapshot } = options;
+  const { backendStatus, enabled, replaceThreads, setActionError, setSnapshot } = options;
   const [listLoading, setListLoading] = useState(false);
 
   useEffect(() => {
+    if (!enabled) {
+      setListLoading(false);
+    }
+  }, [enabled]);
+
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
     let cancelled = false;
 
     void (async () => {
@@ -20,7 +30,7 @@ export function useBackendInitialization(options: UseBackendInitializationOption
           setSnapshot(snapshot);
         }
       } catch (error) {
-        if (!cancelled) {
+        if (!cancelled && !(error instanceof UnauthorizedError)) {
           setActionError(getErrorMessage(error));
         }
       }
@@ -29,9 +39,13 @@ export function useBackendInitialization(options: UseBackendInitializationOption
     return () => {
       cancelled = true;
     };
-  }, [setActionError, setSnapshot]);
+  }, [enabled, setActionError, setSnapshot]);
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
     let active = true;
     let socket: WebSocket | null = null;
     let retryTimer: number | null = null;
@@ -81,10 +95,10 @@ export function useBackendInitialization(options: UseBackendInitializationOption
       }
       socket?.close();
     };
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
-    if (backendStatus !== "ready") {
+    if (!enabled || backendStatus !== "ready") {
       return;
     }
 
@@ -100,7 +114,7 @@ export function useBackendInitialization(options: UseBackendInitializationOption
           });
         }
       } catch (error) {
-        if (!cancelled) {
+        if (!cancelled && !(error instanceof UnauthorizedError)) {
           setActionError(getErrorMessage(error));
         }
       } finally {
@@ -113,7 +127,7 @@ export function useBackendInitialization(options: UseBackendInitializationOption
     return () => {
       cancelled = true;
     };
-  }, [backendStatus, replaceThreads, setActionError]);
+  }, [backendStatus, enabled, replaceThreads, setActionError]);
 
   return {
     listLoading,
