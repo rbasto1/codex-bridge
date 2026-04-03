@@ -66,7 +66,16 @@ function getThreadTitleGenerationConfig() {
     };
   }
 
-  throw new Error("Neither OPENAI_API_KEY nor OPENROUTER_API_KEY is set.");
+  return null;
+}
+
+function getThreadTitleFallback(userMessage: string): string {
+  const normalized = userMessage.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "New session";
+  }
+
+  return normalized.slice(0, 120);
 }
 
 // Icon upload route MUST be registered before express.json() to avoid body consumption
@@ -113,6 +122,15 @@ app.post("/api/thread/name/generate", async (request, response) => {
     }
 
     const titleGenerationConfig = getThreadTitleGenerationConfig();
+
+    if (!titleGenerationConfig) {
+      const name = getThreadTitleFallback(request.body.userMessage);
+      await bridge.request("thread/name/set", {
+        threadId: request.body.threadId,
+        name,
+      });
+      return { name };
+    }
 
     const titlePrompt = `You are a title generator. You output ONLY a thread title. Nothing else.
 

@@ -37,7 +37,7 @@ This is for developers who want:
 
 Optional:
 
-- `OPENAI_API_KEY` or `OPENROUTER_API_KEY` if you want automatic thread title generation
+- `OPENAI_API_KEY` or `OPENROUTER_API_KEY` if you want AI-generated thread titles; otherwise titles fall back to the first 120 characters of the prompt
 - A tunnel such as Cloudflare Tunnel or ngrok if you want remote/mobile access outside your LAN
 
 ## Quick Start
@@ -62,8 +62,8 @@ Environment variables:
 
 - `SERVER_PORT`: port for the production Node server
 - `PORT`: fallback port if `SERVER_PORT` is unset
-- `OPENAI_API_KEY`: enables automatic thread name generation and takes priority when both keys are set
-- `OPENROUTER_API_KEY`: fallback for automatic thread name generation when `OPENAI_API_KEY` is unset
+- `OPENAI_API_KEY`: enables automatic AI thread name generation and takes priority when both keys are set
+- `OPENROUTER_API_KEY`: fallback for automatic AI thread name generation when `OPENAI_API_KEY` is unset
 
 Default production port is `4095`.
 
