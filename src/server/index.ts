@@ -28,6 +28,30 @@ const app = express();
 const DEFAULT_PROJECT_STATE = { projects: [], hidden: [], tags: [{ name: "done", color: "#22c55e" }] };
 const DEFAULT_PROJECT_SESSION_STATE = { threads: {} };
 
+function getThreadTitleGenerationConfig() {
+  const openAiApiKey = process.env.OPENAI_API_KEY?.trim();
+  if (openAiApiKey) {
+    return {
+      apiKey: openAiApiKey,
+      apiUrl: "https://api.openai.com/v1/chat/completions",
+      errorLabel: "OpenAI",
+      model: "gpt-5-mini",
+    };
+  }
+
+  const openRouterApiKey = process.env.OPENROUTER_API_KEY?.trim();
+  if (openRouterApiKey) {
+    return {
+      apiKey: openRouterApiKey,
+      apiUrl: "https://openrouter.ai/api/v1/chat/completions",
+      errorLabel: "OpenRouter",
+      model: "openai/gpt-5-mini",
+    };
+  }
+
+  throw new Error("Neither OPENAI_API_KEY nor OPENROUTER_API_KEY is set.");
+}
+
 // Icon upload route MUST be registered before express.json() to avoid body consumption
 app.post("/api/projects/icons/:projectId", express.raw({ type: "image/*", limit: "1mb" }), (request, response) => {
   ensureCodexDir();
@@ -71,10 +95,7 @@ app.post("/api/thread/name/generate", async (request, response) => {
       throw new Error("threadId and userMessage are required strings.");
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      throw new Error("OPENAI_API_KEY is not set.");
-    }
+    const titleGenerationConfig = getThreadTitleGenerationConfig();
 
     const titlePrompt = `You are a title generator. You output ONLY a thread title. Nothing else.
 
@@ -121,14 +142,14 @@ Your output must be:
 "@App.tsx add dark mode toggle" → Dark mode toggle in App
 </examples>`;
 
-    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+    const openaiResponse = await fetch(titleGenerationConfig.apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${titleGenerationConfig.apiKey}`,
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: titleGenerationConfig.model,
         temperature: 0.5,
         max_tokens: 80,
         messages: [
@@ -140,7 +161,7 @@ Your output must be:
 
     if (!openaiResponse.ok) {
       const text = await openaiResponse.text();
-      throw new Error(`OpenAI API error (${openaiResponse.status}): ${text}`);
+      throw new Error(`${titleGenerationConfig.errorLabel} API error (${openaiResponse.status}): ${text}`);
     }
 
     const data = (await openaiResponse.json()) as {
