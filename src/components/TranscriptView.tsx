@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { useAppStore } from "../client/store";
 import type { TranscriptViewProps } from "../types";
 import { ApprovalCard } from "./ApprovalCard";
@@ -14,15 +14,44 @@ export function TranscriptView(props: TranscriptViewProps) {
     Object.values(state.pendingServerRequestsById).filter((request) => request.threadId === threadId && !request.turnId),
   );
   const transcriptRef = useRef<HTMLElement | null>(null);
-  const scrollAnchorRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    if (!transcriptRef.current || !scrollAnchorRef.current) {
+  useLayoutEffect(() => {
+    const transcriptElement = transcriptRef.current;
+    if (!transcriptElement) {
       return;
     }
 
-    scrollAnchorRef.current.scrollIntoView({ block: "end" });
-  }, [itemCount, threadRequests.length, turnIds.length]);
+    const scrollContainer = transcriptElement.closest<HTMLElement>(".workspace-scroll");
+    if (!scrollContainer) {
+      return;
+    }
+
+    const scrollToBottom = () => {
+      scrollContainer.scrollTop = scrollContainer.scrollHeight;
+    };
+
+    scrollToBottom();
+    const frameId = requestAnimationFrame(scrollToBottom);
+    const mutationObserver = new MutationObserver(() => {
+      scrollToBottom();
+    });
+    mutationObserver.observe(transcriptElement, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+
+    const resizeObserver = new ResizeObserver(() => {
+      scrollToBottom();
+    });
+    resizeObserver.observe(transcriptElement);
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      mutationObserver.disconnect();
+      resizeObserver.disconnect();
+    };
+  }, [threadId]);
 
   return (
     <section ref={transcriptRef} className="transcript-pane">
@@ -48,7 +77,6 @@ export function TranscriptView(props: TranscriptViewProps) {
           onRespond={onRespond}
         />
       ))}
-      <div ref={scrollAnchorRef} />
     </section>
   );
 }

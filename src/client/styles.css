@@ -145,6 +145,18 @@ button {
   background: transparent;
 }
 
+*::-webkit-scrollbar-button,
+*::-webkit-scrollbar-button:single-button,
+*::-webkit-scrollbar-button:vertical:decrement,
+*::-webkit-scrollbar-button:vertical:increment,
+*::-webkit-scrollbar-button:horizontal:decrement,
+*::-webkit-scrollbar-button:horizontal:increment {
+  display: none;
+  width: 0;
+  height: 0;
+  background: transparent;
+}
+
 /* ── App layout ────────────────────────────────── */
 .app-shell {
   display: flex;
@@ -487,7 +499,8 @@ button {
   justify-content: center;
   flex-shrink: 0;
   border-radius: 50%;
-  margin-top: 4px;
+  align-self: flex-start;
+  margin-top: 6px;
 }
 
 .session-indicator.running {
@@ -502,7 +515,7 @@ button {
 .session-indicator.done {
   width: 14px;
   height: 14px;
-  margin-top: 2px;
+  margin-top: 4px;
   margin-right: -8px;
   border-radius: 0;
   background: transparent;
@@ -517,6 +530,10 @@ button {
 
 .session-indicator.unread {
   background: var(--color-interactive);
+}
+
+.session-row.active .session-indicator.running {
+  background: var(--color-success);
 }
 
 @keyframes session-pulse {
@@ -756,11 +773,61 @@ button {
   overflow: hidden;
 }
 
+.scroll-viewport {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .workspace-scroll {
   flex: 1;
+  height: 100%;
   min-height: 0;
   overflow-y: auto;
   padding: 0 24px;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.workspace-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.scroll-viewport-thumb {
+  position: absolute;
+  top: 0;
+  right: 2px;
+  width: 12px;
+  border-radius: 999px;
+  opacity: 0;
+  transition: opacity 160ms ease;
+  cursor: default;
+  user-select: none;
+  pointer-events: auto;
+}
+
+.scroll-viewport:hover .scroll-viewport-thumb,
+.scroll-viewport-thumb[data-dragging="true"] {
+  opacity: 1;
+}
+
+.scroll-viewport-thumb::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(4px);
+}
+
+.scroll-viewport-thumb:hover::after,
+.scroll-viewport-thumb[data-dragging="true"]::after {
+  background: rgba(255, 255, 255, 0.34);
 }
 
 .workspace-column {
@@ -834,13 +901,15 @@ button {
 .thread-status-dot {
   width: 8px;
   height: 8px;
+  align-self: flex-start;
   flex-shrink: 0;
+  margin-top: 6px;
   border-radius: 50%;
   background: var(--text-weaker);
 }
 
 .thread-status-dot.running {
-  background: var(--color-brand);
+  background: var(--color-success);
   animation: session-pulse 1.2s ease-in-out infinite;
 }
 

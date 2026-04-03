@@ -20,6 +20,7 @@ import {
   type ThreadSessionConfig,
 } from "../shared/codex.js";
 import { ProjectSidebar } from "../components/ProjectSidebar";
+import { ScrollViewport } from "../components/ScrollViewport";
 import { ThreadComposer } from "../components/ThreadComposer";
 import { ThreadHeader } from "../components/ThreadHeader";
 import { TranscriptView } from "../components/TranscriptView";
@@ -502,7 +503,7 @@ export default function App() {
               <section className="banner info-banner">The active turn is not steerable. Wait for it to finish before sending another turn.</section>
             ) : null}
 
-            <div className="workspace-scroll">
+            <ScrollViewport className="workspace-scroll">
               <div className="workspace-column">
                 <TranscriptView
                   threadId={currentThread.id}
@@ -510,7 +511,7 @@ export default function App() {
                   onRespond={handleRespondToRequest}
                 />
               </div>
-            </div>
+            </ScrollViewport>
 
             <ThreadComposer
               activeThreadId={activeThreadId}
