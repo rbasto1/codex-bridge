@@ -189,21 +189,17 @@ export interface AppStore {
 export interface SessionRowProps {
   threadId: string;
   active: boolean;
-  archived: boolean;
-  availableTags: TagDefinition[];
   tags: TagDefinition[];
   showUnread: boolean;
   onOpen: () => void;
   onToggleDone: () => void;
-  onToggleArchived: () => void;
-  onToggleTag: (tagName: string) => void;
-  onCreateTag: (name: string, color: string) => string | null;
 }
 
 export interface TranscriptViewProps {
   threadId: string;
   respondingRequestKey: string | null;
   onRespond: (request: BrowserServerRequest, body: RequestResponseBody) => Promise<void>;
+  onForkMessage: (threadId: string, turnId: string, itemId: string) => void;
 }
 
 export interface TurnBlockProps extends TranscriptViewProps {
@@ -235,6 +231,11 @@ export interface CopyMessageButtonProps {
   className?: string;
 }
 
+export interface ForkMessageButtonProps {
+  className?: string;
+  onClick: () => void;
+}
+
 export interface ComposerActionIconProps {
   action: ComposerAction;
 }
@@ -248,9 +249,15 @@ export interface ThreadHeaderProps {
   currentThreadIsUiDraft: boolean;
   isLive: boolean;
   threadLoadingId: string | null;
+  archived: boolean;
+  availableTags: TagDefinition[];
+  tags: TagDefinition[];
   onOpenReplay: () => void;
   onOpenLive: () => void;
   onRename: (name: string) => Promise<void>;
+  onToggleArchived: () => void;
+  onToggleTag: (tagName: string) => void;
+  onCreateTag: (name: string, color: string) => string | null;
 }
 
 export interface ThreadComposerProps {
@@ -298,7 +305,6 @@ export interface ProjectSidebarProps {
   threadsById: Record<string, Thread>;
   visibleProjects: string[];
   onAddProject: (project: string) => void;
-  onCreateTag: (name: string, color: string) => string | null;
   onHideProject: (project: string) => void;
   onOpenThread: (threadId: string, mode: ThreadMode) => void;
   onRemoveProject: (project: string) => void;
@@ -307,11 +313,9 @@ export interface ProjectSidebarProps {
   onSaveProjectName: (project: string, name: string) => void;
   onSelectProject: (project: string) => void;
   onStartThread: () => void;
-  onToggleThreadArchived: (threadId: string) => void;
   onUnhideProject: (project: string) => void;
   onUploadProjectIcon: (project: string, file: File) => Promise<void>;
   onToggleThreadDone: (threadId: string) => void;
-  onToggleThreadTag: (threadId: string, tagName: string) => void;
 }
 
 export interface ProjectContextMenuProps {

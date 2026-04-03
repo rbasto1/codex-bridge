@@ -9,9 +9,11 @@ export function ThreadComposer(props: ThreadComposerProps) {
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
-    if (!props.currentThread || !props.isLive) {
+    if (!props.currentThread || (!props.isLive && !props.currentThread.uiOnly)) {
       return;
     }
+
+    void props.focusToken;
 
     const frame = window.requestAnimationFrame(() => {
       composerInputRef.current?.focus();
@@ -42,8 +44,8 @@ export function ThreadComposer(props: ThreadComposerProps) {
                 props.onSubmit();
               }
             }}
-            placeholder={props.isLive ? "Message Codex" : "Resume the thread live to continue the conversation"}
-            disabled={!props.currentThread || !props.isLive}
+            placeholder={props.isLive || props.currentThread?.uiOnly ? "Message Codex" : "Resume the thread live to continue the conversation"}
+            disabled={!props.currentThread || (!props.isLive && !props.currentThread.uiOnly)}
           />
           <button
             type="button"
@@ -65,8 +67,8 @@ export function ThreadComposer(props: ThreadComposerProps) {
         </div>
 
         {props.composerControlDraft ? (
-          <div className="composer-control-row" aria-label="Composer settings">
-            <div className="composer-mode-toggle" role="group" aria-label="Mode">
+          <div className="composer-control-row">
+            <div className="composer-mode-toggle">
               <button
                 type="button"
                 className={`composer-mode-button ${props.composerControlDraft.mode === "default" ? "active" : ""}`}

@@ -149,6 +149,22 @@ export function createUiDraftThread(cwd: string): Thread {
   };
 }
 
+export function createUiForkThread(sourceThread: Thread, turns: Thread["turns"]): Thread {
+  const timestampSeconds = Math.floor(Date.now() / 1000);
+
+  return {
+    ...sourceThread,
+    id: `ui-draft:${crypto.randomUUID()}`,
+    updatedAt: timestampSeconds,
+    status: { type: "idle" },
+    turns: turns.map((turn) => ({
+      ...turn,
+      items: turn.items.map((item) => ({ ...item })),
+    })),
+    uiOnly: true,
+  };
+}
+
 export function isUiOnlyThread(thread: Thread | null | undefined): thread is Thread & { uiOnly: true } {
   return Boolean(thread?.uiOnly);
 }
@@ -165,6 +181,18 @@ export function moveThreadScopedState<T>(
   const next = { ...state, [toThreadId]: state[fromThreadId] };
   delete next[fromThreadId];
   return next;
+}
+
+export function copyThreadScopedState<T>(
+  state: Record<string, T>,
+  fromThreadId: string,
+  toThreadId: string,
+): Record<string, T> {
+  if (fromThreadId === toThreadId || !(fromThreadId in state)) {
+    return state;
+  }
+
+  return { ...state, [toThreadId]: state[fromThreadId] };
 }
 
 export function asString(value: unknown): string {

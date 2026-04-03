@@ -25,7 +25,6 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
     threadsById,
     visibleProjects,
     onAddProject,
-    onCreateTag,
     onHideProject,
     onOpenThread,
     onRemoveProject,
@@ -34,11 +33,9 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
     onSaveProjectName,
     onSelectProject,
     onStartThread,
-    onToggleThreadArchived,
     onUnhideProject,
     onUploadProjectIcon,
     onToggleThreadDone,
-    onToggleThreadTag,
   } = props;
   const unreadThreadIds = useAppStore((state) => state.unreadThreadIds);
 
@@ -73,11 +70,9 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
   });
   const visibleThreadIds = filteredThreadIds.filter((threadId) => !sessionStateByThreadId[threadId]?.archived);
   const archivedThreadIds = filteredThreadIds.filter((threadId) => sessionStateByThreadId[threadId]?.archived);
-  const displayedThreadIds = showArchivedSessions ? [...visibleThreadIds, ...archivedThreadIds] : visibleThreadIds;
-
   const sidebarProjectLabel = (() => {
     if (!currentProject) {
-      return "Codex Web";
+      return "Codex Bridge";
     }
 
     const stateEntry = projectState.find((entry) => entry.id === currentProject);
@@ -85,7 +80,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
       return stateEntry.name;
     }
 
-    return currentProject.split("/").filter(Boolean).pop() ?? "Codex Web";
+    return currentProject.split("/").filter(Boolean).pop() ?? "Codex Bridge";
   })();
 
   function handleDragStart(project: string, event: DragEvent) {
@@ -167,8 +162,8 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
 
       <aside className={`sidebar ${sidebarCollapsed ? "collapsed" : ""}`}>
         <div className="project-rail">
-          <div className="project-rail-brand" title="Codex Web">
-            <img src="/codex-web-dark.png" alt="" className="project-rail-brand-logo" />
+          <div className="project-rail-brand" title="Codex Bridge">
+            <img src="/codex-bridge-dark.png" alt="" className="project-rail-brand-logo" />
           </div>
           <div className="project-rail-list">
             {visibleProjects.map((project) => {
@@ -325,7 +320,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
           </div>
 
           <div className="session-list">
-            {displayedThreadIds.map((threadId) => {
+            {visibleThreadIds.map((threadId) => {
               const activeTagNames = sessionStateByThreadId[threadId]?.tags ?? [];
               const activeTags = availableTags.filter((tag) => activeTagNames.includes(tag.name));
               return (
@@ -333,27 +328,37 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
                 key={threadId}
                 threadId={threadId}
                 active={threadId === activeThreadId}
-                archived={Boolean(sessionStateByThreadId[threadId]?.archived)}
-                availableTags={availableTags}
                 tags={activeTags}
                 showUnread={Boolean(unreadThreadIds[threadId]) && threadId !== activeThreadId}
                 onOpen={() => openThread(threadId)}
-                onToggleArchived={() => onToggleThreadArchived(threadId)}
                 onToggleDone={() => onToggleThreadDone(threadId)}
-                onToggleTag={(tagName) => onToggleThreadTag(threadId, tagName)}
-                onCreateTag={onCreateTag}
               />
               );
             })}
-            {!showArchivedSessions && archivedThreadIds.length > 0 ? (
+            {archivedThreadIds.length > 0 || showArchivedSessions ? (
               <button
                 type="button"
                 className="session-load-more"
-                onClick={() => setShowArchivedSessions(true)}
+                onClick={() => setShowArchivedSessions((value) => !value)}
               >
-                Load more ({archivedThreadIds.length} archived)
+                {showArchivedSessions ? "Hide archived" : `Load more (${archivedThreadIds.length} archived)`}
               </button>
             ) : null}
+            {showArchivedSessions ? archivedThreadIds.map((threadId) => {
+              const activeTagNames = sessionStateByThreadId[threadId]?.tags ?? [];
+              const activeTags = availableTags.filter((tag) => activeTagNames.includes(tag.name));
+              return (
+              <SessionRow
+                key={threadId}
+                threadId={threadId}
+                active={threadId === activeThreadId}
+                tags={activeTags}
+                showUnread={Boolean(unreadThreadIds[threadId]) && threadId !== activeThreadId}
+                onOpen={() => openThread(threadId)}
+                onToggleDone={() => onToggleThreadDone(threadId)}
+              />
+              );
+            }) : null}
             {!listLoading && filteredThreadIds.length === 0 ? (
               <div className="empty-card small-empty">No sessions match the current project.</div>
             ) : null}

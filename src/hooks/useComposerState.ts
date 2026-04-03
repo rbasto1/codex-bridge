@@ -10,7 +10,7 @@ import {
   normalizeReasoningEffort,
 } from "../lib/composer";
 import { getErrorMessage } from "../lib/errors";
-import { moveThreadScopedState } from "../lib/threads";
+import { copyThreadScopedState, moveThreadScopedState } from "../lib/threads";
 import type { Thread, ThreadSessionConfig } from "../shared/codex.js";
 import type {
   ComposerAction,
@@ -57,8 +57,10 @@ export function useComposerState(options: UseComposerStateOptions) {
   const waitingOnUserAction = currentWaitingFlags.includes("waitingOnApproval")
     || currentWaitingFlags.includes("waitingOnUserInput");
   const hasComposerText = composerValue.trim().length > 0;
+  const isReplayDraft = Boolean(currentThread?.uiOnly) && !isLive;
+  const canInteractWithComposer = isLive || isReplayDraft;
   const canCompose = Boolean(
-    currentThread && isLive && backendStatus === "ready" && !waitingOnUserAction && !isCurrentThreadNonSteerable,
+    currentThread && canInteractWithComposer && backendStatus === "ready" && !waitingOnUserAction && !isCurrentThreadNonSteerable,
   );
   const isStreaming = Boolean(activeTurnId) && !waitingOnUserAction;
   const composerAction: ComposerAction = isStreaming
@@ -69,7 +71,7 @@ export function useComposerState(options: UseComposerStateOptions) {
   const composerActionDisabled = composerAction === "stop"
     ? !isLive
     : !canCompose || composerBusy || !hasComposerText;
-  const composerControlsDisabled = !currentThread || !isLive || Boolean(activeTurnId) || modelsLoading;
+  const composerControlsDisabled = !currentThread || !canInteractWithComposer || Boolean(activeTurnId) || modelsLoading;
 
   useEffect(() => {
     if (backendStatus !== "ready") {
@@ -161,6 +163,13 @@ export function useComposerState(options: UseComposerStateOptions) {
     }));
   }
 
+  function setComposerDraft(threadId: string, value: string) {
+    setComposerDrafts((previous) => ({
+      ...previous,
+      [threadId]: value,
+    }));
+  }
+
   function updateCurrentThreadControls(updater: (current: ComposerControlDraft) => ComposerControlDraft) {
     if (!activeThreadId || !composerControlDraft) {
       return;
@@ -213,6 +222,11 @@ export function useComposerState(options: UseComposerStateOptions) {
     setThreadPermissionBaselines((previous) => moveThreadScopedState(previous, fromThreadId, toThreadId));
   }
 
+  function copyScopedState(fromThreadId: string, toThreadId: string) {
+    setThreadControlDrafts((previous) => copyThreadScopedState(previous, fromThreadId, toThreadId));
+    setThreadPermissionBaselines((previous) => copyThreadScopedState(previous, fromThreadId, toThreadId));
+  }
+
   function clearComposerDraft(targetThreadId: string, draftThreadId?: string) {
     setComposerDrafts((previous) => {
       const next = { ...previous, [targetThreadId]: "" };
@@ -249,12 +263,14 @@ export function useComposerState(options: UseComposerStateOptions) {
     threadPermissionBaselines,
     waitingOnUserAction,
     clearComposerDraft,
+    copyScopedState,
     focusComposer,
     moveScopedState,
     selectComposerEffort,
     selectComposerMode,
     selectComposerModel,
     setComposerBusy,
+    setComposerDraft,
     setComposerValue,
     setDefaultPermissionMode,
     setThreadPermissionBaselines,

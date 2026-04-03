@@ -969,7 +969,91 @@ button {
 
 .thread-header-actions {
   display: flex;
+  align-items: center;
   gap: 6px;
+}
+
+.thread-menu-wrap {
+  position: relative;
+}
+
+.thread-menu-toggle {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border-weak);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-weak);
+}
+
+.thread-menu-toggle:hover,
+.thread-menu-toggle.open {
+  background: var(--surface-base-hover);
+  color: var(--text-base);
+}
+
+.thread-menu-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  width: min(280px, 80vw);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border-weak);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised-stronger);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.thread-menu-item {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-weak);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-base);
+  text-align: left;
+}
+
+.thread-menu-item:hover {
+  background: var(--surface-base-hover);
+}
+
+.thread-menu-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.thread-menu-label {
+  font-size: 12px;
+  color: var(--text-weaker);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.thread-menu-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.thread-menu-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-weak);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text-weak);
 }
 
 /* ── Badges ────────────────────────────────────── */
@@ -1062,6 +1146,15 @@ button {
   padding-bottom: 28px;
 }
 
+.message-action-row {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .copy-icon-button {
   display: inline-flex;
   align-items: center;
@@ -1104,12 +1197,17 @@ button {
 }
 
 .message-copy-button {
-  position: absolute;
-  bottom: 0;
+  position: static;
+}
+
+.message-fork-button {
+  position: static;
 }
 
 .item-copyable .message-shell:hover .message-copy-button,
+.item-copyable .message-shell:hover .message-fork-button,
 .item-copyable .message-shell:focus-within .message-copy-button,
+.item-copyable .message-shell:focus-within .message-fork-button,
 .turn-copyable:hover .turn-copy-button,
 .turn-copyable:focus-within .turn-copy-button {
   opacity: 1;

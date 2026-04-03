@@ -39,7 +39,7 @@ import {
 } from "../lib/composer";
 import { getErrorMessage, looksNonSteerable } from "../lib/errors";
 import { writePersistedUi } from "../lib/storage";
-import { createUiDraftThread, isUiOnlyThread } from "../lib/threads";
+import { createUiDraftThread, createUiForkThread, isUiOnlyThread, renderUserInputs } from "../lib/threads";
 import type { RequestResponseBody, ThreadMode } from "../types";
 
 export default function App() {
@@ -142,11 +142,13 @@ export default function App() {
   const openThread = useCallback(async (threadId: string, mode: ThreadMode) => {
     const thread = useAppStore.getState().threadsById[threadId];
     if (isUiOnlyThread(thread)) {
-      composer.focusComposer();
+      if (mode === "live" || composer.composerDrafts[threadId]?.trim()) {
+        composer.focusComposer();
+      }
       setActionError(null);
       setSelectedThreadError(null);
       startTransition(() => {
-        hydrateThread(thread, "live", useAppStore.getState().threadSessionConfigById[threadId] ?? null);
+        hydrateThread(thread, mode, useAppStore.getState().threadSessionConfigById[threadId] ?? null);
       });
       window.history.replaceState(null, "", window.location.pathname);
       return;
@@ -327,6 +329,45 @@ export default function App() {
     }
   }
 
+  function handleForkMessage(threadId: string, turnId: string, itemId: string) {
+    const state = useAppStore.getState();
+    const sourceThread = state.threadsById[threadId];
+    const sourceItem = state.itemsById[itemId];
+    const turnOrder = state.turnOrderByThreadId[threadId] ?? [];
+    const selectedTurnIndex = turnOrder.indexOf(turnId);
+    const draftText = sourceItem?.type === "userMessage" ? renderUserInputs(sourceItem.content) : "";
+
+    if (!sourceThread || selectedTurnIndex < 0 || !draftText.trim()) {
+      return;
+    }
+
+    const forkedTurns = turnOrder.slice(0, selectedTurnIndex).map((sourceTurnId) => {
+      const sourceTurn = state.turnsById[sourceTurnId];
+      const itemIds = state.itemOrderByTurnId[sourceTurnId] ?? [];
+
+      return {
+        ...(sourceTurn ?? { id: sourceTurnId, status: "completed" as const, error: null }),
+        items: itemIds
+          .map((sourceItemId) => state.itemsById[sourceItemId])
+          .filter(Boolean)
+          .map((item) => ({ ...item })),
+      };
+    });
+    const forkedThread = createUiForkThread(sourceThread, forkedTurns);
+    const sourceSessionConfig = state.threadSessionConfigById[threadId] ?? null;
+
+    setActionError(null);
+    setSelectedThreadError(null);
+
+    composer.copyScopedState(threadId, forkedThread.id);
+    composer.setComposerDraft(forkedThread.id, draftText);
+    startTransition(() => {
+      hydrateThread(forkedThread, "replay", sourceSessionConfig);
+    });
+    composer.focusComposer();
+    window.history.replaceState(null, "", window.location.pathname);
+  }
+
   async function handleSubmitComposer() {
     if (!activeThreadId || !currentThread || !composer.composerControlDraft) {
       return;
@@ -486,7 +527,6 @@ export default function App() {
         threadsById={threadsById}
         visibleProjects={projectManager.visibleProjects}
         onAddProject={projectManager.addProject}
-        onCreateTag={projectManager.createTag}
         onHideProject={projectManager.hideProject}
         onOpenThread={(threadId, mode) => void openThread(threadId, mode)}
         onRemoveProject={projectManager.removeProject}
@@ -495,11 +535,9 @@ export default function App() {
         onSaveProjectName={projectManager.saveProjectName}
         onSelectProject={(project) => void projectManager.selectProject(project)}
         onStartThread={() => void handleStartThread()}
-        onToggleThreadArchived={projectManager.toggleThreadArchived}
         onUnhideProject={projectManager.unhideProject}
         onUploadProjectIcon={projectManager.saveProjectIcon}
         onToggleThreadDone={projectManager.toggleThreadDone}
-        onToggleThreadTag={projectManager.toggleThreadTag}
       />
 
       <main className="workspace">
@@ -528,9 +566,17 @@ export default function App() {
               currentThreadIsUiDraft={currentThreadIsUiDraft}
               isLive={composer.isLive}
               threadLoadingId={threadLoadingId}
+              archived={Boolean(projectManager.projectSessionStateByThreadId[currentThread.id]?.archived)}
+              availableTags={projectManager.projectTags}
+              tags={projectManager.projectTags.filter((tag) => (
+                projectManager.projectSessionStateByThreadId[currentThread.id]?.tags ?? []
+              ).includes(tag.name))}
               onOpenReplay={() => void openThread(currentThread.id, "replay")}
               onOpenLive={() => void openThread(currentThread.id, "live")}
               onRename={handleRenameThread}
+              onToggleArchived={() => projectManager.toggleThreadArchived(currentThread.id)}
+              onToggleTag={(tagName) => projectManager.toggleThreadTag(currentThread.id, tagName)}
+              onCreateTag={projectManager.createTag}
             />
 
             {composer.waitingOnUserAction ? (
@@ -546,6 +592,7 @@ export default function App() {
                 <TranscriptView
                   threadId={currentThread.id}
                   respondingRequestKey={respondingRequestKey}
+                  onForkMessage={handleForkMessage}
                   onRespond={handleRespondToRequest}
                 />
               </div>

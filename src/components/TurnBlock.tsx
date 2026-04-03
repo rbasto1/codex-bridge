@@ -8,7 +8,7 @@ import { CopyMessageButton } from "./CopyMessageButton";
 import { TranscriptItemCard } from "./TranscriptItemCard";
 
 export function TurnBlock(props: TurnBlockProps) {
-  const { threadId, turnId, respondingRequestKey, onRespond } = props;
+  const { threadId, turnId, respondingRequestKey, onForkMessage, onRespond } = props;
   const turn = useAppStore((state) => state.turnsById[turnId]);
   const itemIds = useAppStore((state) => state.itemOrderByTurnId[turnId] ?? []);
   const turnRequests = useAppStore((state) =>
@@ -36,11 +36,6 @@ export function TurnBlock(props: TurnBlockProps) {
 
   return (
     <div className="turn-card">
-      <div className="turn-header">
-        <span className="eyebrow">Turn {turnId}</span>
-        <span className="badge muted">{turn?.status ?? "inProgress"}</span>
-      </div>
-
       <div className={`turn-content ${agentCopyText ? "turn-copyable" : ""}`}>
         <div className="turn-items">
           {itemIds.map((itemId) => (
@@ -50,6 +45,7 @@ export function TurnBlock(props: TurnBlockProps) {
               turnId={turnId}
               itemId={itemId}
               respondingRequestKey={respondingRequestKey}
+              onForkMessage={onForkMessage}
               onRespond={onRespond}
             />
           ))}

@@ -4,7 +4,7 @@ import { ApprovalCard } from "./ApprovalCard";
 import { TurnBlock } from "./TurnBlock";
 
 export function TranscriptView(props: TranscriptViewProps) {
-  const { threadId, respondingRequestKey, onRespond } = props;
+  const { threadId, respondingRequestKey, onForkMessage, onRespond } = props;
   const turnIds = useAppStore((state) => state.turnOrderByThreadId[threadId] ?? []);
   const threadRequests = useAppStore((state) =>
     Object.values(state.pendingServerRequestsById).filter((request) => request.threadId === threadId && !request.turnId),
@@ -19,11 +19,12 @@ export function TranscriptView(props: TranscriptViewProps) {
       {turnIds.map((turnId) => (
         <TurnBlock
           key={turnId}
-          threadId={threadId}
-          turnId={turnId}
-          respondingRequestKey={respondingRequestKey}
-          onRespond={onRespond}
-        />
+            threadId={threadId}
+            turnId={turnId}
+            respondingRequestKey={respondingRequestKey}
+            onForkMessage={onForkMessage}
+            onRespond={onRespond}
+          />
       ))}
 
       {threadRequests.map((request) => (
