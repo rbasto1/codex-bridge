@@ -503,7 +503,7 @@ export default function App() {
               <section className="banner info-banner">The active turn is not steerable. Wait for it to finish before sending another turn.</section>
             ) : null}
 
-            <ScrollViewport className="workspace-scroll">
+            <ScrollViewport key={currentThread.id} className="workspace-scroll">
               <div className="workspace-column">
                 <TranscriptView
                   threadId={currentThread.id}
