@@ -1495,6 +1495,10 @@ details[open] > .collapsible-summary::before {
     opacity: 0;
     pointer-events: none;
   }
+
+  .thread-header-main {
+    padding-left: 44px;
+  }
 }
 
 @media (max-width: 720px) {
