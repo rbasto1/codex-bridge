@@ -1,0 +1,22 @@
+<svg width="512" height="512" viewBox="40 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+
+    <!-- House -->
+    <path d="M80 300L180 220L280 300V392C280 405 269 416 256 416H104C91 416 80 405 80 392V300Z"/>
+
+    <!-- Terminal prompt -->
+    <path d="M130 320L160 345L130 370"/>
+    <path d="M175 370H225"/>
+
+    <!-- Connection line (lower start, ends at globe edge) -->
+    <path d="M280 360C340 340 390 300 330 160"/>
+
+    <!-- Globe -->
+    <circle cx="420" cy="160" r="90"/>
+    <path d="M330 160C360 120 480 120 510 160"/>
+    <path d="M330 160C360 200 480 200 510 160"/>
+    <path d="M420 70C450 110 450 210 420 250"/>
+    <path d="M420 70C390 110 390 210 420 250"/>
+
+  </g>
+</svg>

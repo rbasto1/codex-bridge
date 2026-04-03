@@ -1,4 +1,4 @@
-const SESSION_COMPLETE_SOUND_URL = new URL("./assets/staplebops-01.aac", import.meta.url).href;
+const SESSION_COMPLETE_SOUND_URL = new URL("./assets/turn-ended.mp3", import.meta.url).href;
 
 export function playSessionCompleteSound(): void {
   if (typeof Audio === "undefined") {

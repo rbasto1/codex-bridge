@@ -1,6 +1,5 @@
 import { useDeferredValue, useRef, useState, type DragEvent } from "react";
 
-import codexLogoUrl from "../../codex.svg";
 import { useAppStore } from "../client/store";
 import { encodeProjectId, formatProjectTileLabel } from "../lib/projects";
 import { useSidebarState } from "../hooks/useSidebarState";
@@ -169,7 +168,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
       <aside className={`sidebar ${sidebarCollapsed ? "collapsed" : ""}`}>
         <div className="project-rail">
           <div className="project-rail-brand" title="Codex Web">
-            <img src={codexLogoUrl} alt="" className="project-rail-brand-logo" />
+            <img src="/codex-web-dark.png" alt="" className="project-rail-brand-logo" />
           </div>
           <div className="project-rail-list">
             {visibleProjects.map((project) => {
