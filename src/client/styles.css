@@ -451,8 +451,10 @@ button {
 
 .session-row {
   display: flex;
-  align-items: stretch;
+  align-items: flex-start;
+  gap: 8px;
   width: 100%;
+  padding: 8px 10px;
   border-radius: var(--radius-sm);
   background: transparent;
   transition: background-color 0.15s ease;
@@ -468,23 +470,13 @@ button {
 }
 
 .session-row-main {
+  width: 100%;
   min-width: 0;
-  flex: 1;
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 8px 4px 8px 10px;
+  display: block;
+  padding: 0;
   border: none;
   background: transparent;
   text-align: left;
-}
-
-.session-row-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 10px 8px 0;
-  flex: 0 0 auto;
 }
 
 .session-indicator {
@@ -510,7 +502,7 @@ button {
 .session-indicator.done {
   width: 14px;
   height: 14px;
-  margin-top: 0;
+  margin-top: 2px;
   margin-right: -8px;
   border-radius: 0;
   background: transparent;
@@ -540,14 +532,13 @@ button {
   gap: 1px;
 }
 
-.session-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.session-content {
+  flex: 1;
   min-width: 0;
 }
 
 .session-name {
+  display: block;
   font-weight: var(--font-weight-medium);
   font-size: var(--font-size-sm);
   color: var(--text-strong);
@@ -572,6 +563,31 @@ button {
   text-overflow: ellipsis;
 }
 
+.session-row-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-top: 1px;
+}
+
+.session-meta-button {
+  min-width: 0;
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+}
+
+.session-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
 .session-tag-dots {
   display: inline-flex;
   align-items: center;
@@ -591,6 +607,7 @@ button {
 }
 
 .session-tag-toggle,
+.session-archive-toggle,
 .session-done-toggle {
   width: 20px;
   height: 20px;
@@ -609,6 +626,8 @@ button {
 
 .session-tag-toggle:hover,
 .session-tag-toggle.open,
+.session-archive-toggle:hover,
+.session-archive-toggle.active,
 .session-done-toggle:hover {
   color: var(--text-base);
   border-color: var(--border-weak);
@@ -632,7 +651,7 @@ button {
   padding: 8px;
   border: 1px solid var(--border-weak);
   border-radius: var(--radius-md);
-  background: var(--bg-elevated);
+  background: var(--surface-raised-stronger);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
 }
 
