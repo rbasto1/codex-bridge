@@ -179,6 +179,7 @@ button {
 
 .project-rail-brand,
 .project-tile {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -192,6 +193,17 @@ button {
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.project-unread-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-interactive);
+  border: 1px solid var(--bg-strong);
 }
 
 .project-rail-brand {
@@ -439,7 +451,7 @@ button {
 
 .session-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   width: 100%;
   padding: 8px 10px;
@@ -464,6 +476,7 @@ button {
   height: 6px;
   flex-shrink: 0;
   border-radius: 50%;
+  margin-top: 4px;
 }
 
 .session-indicator.running {
@@ -477,6 +490,10 @@ button {
 
 .session-indicator.done {
   background: var(--color-success);
+}
+
+.session-indicator.unread {
+  background: var(--color-interactive);
 }
 
 @keyframes session-pulse {
@@ -502,12 +519,32 @@ button {
   min-width: 0;
 }
 
+.session-name.done {
+  color: var(--text-weak);
+  text-decoration: line-through;
+}
+
 .session-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 12px;
   color: var(--text-weaker);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.session-done-toggle {
+  border: none;
+  background: transparent;
+  color: var(--text-weak);
+  font-size: 11px;
+  padding: 0;
+}
+
+.session-done-toggle:hover {
+  color: var(--text-base);
 }
 
 /* session-time removed — time now shown in session-meta */
@@ -540,13 +577,17 @@ button {
 
 /* ── Thread header ─────────────────────────────── */
 .thread-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  display: block;
   padding: 12px 24px;
   background: var(--bg-base);
   border-bottom: 1px solid var(--border-weak);
   flex-shrink: 0;
+}
+
+.thread-header-column {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
 }
 
 .thread-header-main {
@@ -1177,7 +1218,6 @@ details[open] > .collapsible-summary::before {
   gap: 2px;
   padding: 12px 24px 4px;
   background: var(--bg-base);
-  border-top: 1px solid var(--border-weak);
   flex-shrink: 0;
 }
 

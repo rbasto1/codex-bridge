@@ -34,6 +34,7 @@ export const useAppStore = create<AppStore>((set) => ({
   pendingServerRequestsById: {},
   selectedThreadError: null,
   nonSteerableThreadIds: {},
+  unreadThreadIds: {},
 
   setSnapshot: (snapshot) => {
     set(() => ({
@@ -122,15 +123,35 @@ export const useAppStore = create<AppStore>((set) => ({
   },
 
   setActiveThread: (threadId) => {
-    set(() => ({
-      activeThreadId: threadId,
-    }));
+    set((state) => {
+      const unreadThreadIds = { ...state.unreadThreadIds };
+      if (threadId) {
+        delete unreadThreadIds[threadId];
+      }
+
+      return {
+        activeThreadId: threadId,
+        unreadThreadIds,
+      };
+    });
   },
 
   setSelectedThreadError: (message) => {
     set(() => ({
       selectedThreadError: message,
     }));
+  },
+
+  clearThreadUnread: (threadId) => {
+    set((state) => {
+      if (!state.unreadThreadIds[threadId]) {
+        return state;
+      }
+
+      const unreadThreadIds = { ...state.unreadThreadIds };
+      delete unreadThreadIds[threadId];
+      return { unreadThreadIds };
+    });
   },
 
   setThreadSessionConfig: (threadId, sessionConfig) => {
@@ -263,6 +284,15 @@ export const useAppStore = create<AppStore>((set) => ({
       if (threadId && isThreadActivity && !state.liveAttachedThreadIds[threadId]) {
         return state;
       }
+      const unreadThreadIds = { ...state.unreadThreadIds };
+      const shouldMarkUnread = Boolean(
+        threadId
+          && threadId !== state.activeThreadId
+          && (method === "turn/completed" || method === "item/completed"),
+      );
+      if (shouldMarkUnread && threadId) {
+        unreadThreadIds[threadId] = true;
+      }
 
       switch (method) {
         case "thread/started": {
@@ -340,6 +370,7 @@ export const useAppStore = create<AppStore>((set) => ({
             turnOrderByThreadId,
             activeTurnIdByThreadId,
             nonSteerableThreadIds,
+            unreadThreadIds,
           };
         }
 
@@ -363,6 +394,7 @@ export const useAppStore = create<AppStore>((set) => ({
             turnsById,
             turnOrderByThreadId,
             itemOrderByTurnId,
+            unreadThreadIds,
           };
         }
 
@@ -391,6 +423,7 @@ export const useAppStore = create<AppStore>((set) => ({
             turnOrderByThreadId,
             itemsById,
             itemOrderByTurnId,
+            unreadThreadIds,
           };
         }
 
@@ -419,6 +452,7 @@ export const useAppStore = create<AppStore>((set) => ({
             turnOrderByThreadId,
             itemsById,
             itemOrderByTurnId,
+            unreadThreadIds,
           };
         }
 
@@ -447,6 +481,7 @@ export const useAppStore = create<AppStore>((set) => ({
             turnOrderByThreadId,
             itemsById,
             itemOrderByTurnId,
+            unreadThreadIds,
           };
         }
 
@@ -475,6 +510,7 @@ export const useAppStore = create<AppStore>((set) => ({
             turnOrderByThreadId,
             itemsById,
             itemOrderByTurnId,
+            unreadThreadIds,
           };
         }
 
@@ -508,6 +544,7 @@ export const useAppStore = create<AppStore>((set) => ({
             turnOrderByThreadId,
             itemsById,
             itemOrderByTurnId,
+            unreadThreadIds,
           };
         }
 
@@ -542,6 +579,7 @@ export const useAppStore = create<AppStore>((set) => ({
             turnOrderByThreadId,
             itemsById,
             itemOrderByTurnId,
+            unreadThreadIds,
           };
         }
 

@@ -33,7 +33,10 @@ export function useComposerState(options: UseComposerStateOptions) {
     setActionError,
   } = options;
 
-  const [composerDrafts, setComposerDrafts] = useState<Record<string, string>>({});
+  const [composerDrafts, setComposerDrafts] = useState<Record<string, string>>(initialUi.composerDrafts ?? {});
+  const [defaultPermissionMode, setDefaultPermissionMode] = useState<"standard" | "full">(
+    initialUi.defaultPermissionMode ?? "standard",
+  );
   const [threadControlDrafts, setThreadControlDrafts] = useState<Record<string, ComposerControlDraft>>(
     initialUi.threadControlDrafts ?? {},
   );
@@ -124,7 +127,7 @@ export function useComposerState(options: UseComposerStateOptions) {
   }, [activeThreadId, currentThreadSessionConfig]);
 
   useEffect(() => {
-    if (!activeThreadId || !currentThread) {
+    if (!activeThreadId || !currentThread || composerControlDraft) {
       return;
     }
 
@@ -137,13 +140,15 @@ export function useComposerState(options: UseComposerStateOptions) {
       if (!nextDraft) {
         return previous;
       }
+      nextDraft.fullAccess = defaultPermissionMode === "full";
+      nextDraft.updatedAt = Date.now();
 
       return {
         ...previous,
         [activeThreadId]: nextDraft,
       };
     });
-  }, [activeThreadId, availableModels, currentThread, currentThreadSessionConfig]);
+  }, [activeThreadId, availableModels, composerControlDraft, currentThread, currentThreadSessionConfig, defaultPermissionMode]);
 
   function setComposerValue(value: string) {
     if (!activeThreadId) {
@@ -163,7 +168,10 @@ export function useComposerState(options: UseComposerStateOptions) {
 
     setThreadControlDrafts((previous) => ({
       ...previous,
-      [activeThreadId]: updater(previous[activeThreadId] ?? composerControlDraft),
+      [activeThreadId]: {
+        ...updater(previous[activeThreadId] ?? composerControlDraft),
+        updatedAt: Date.now(),
+      },
     }));
   }
 
@@ -191,6 +199,8 @@ export function useComposerState(options: UseComposerStateOptions) {
   }
 
   function toggleFullAccess() {
+    const nextMode = composerControlDraft?.fullAccess ? "standard" : "full";
+    setDefaultPermissionMode(nextMode);
     updateCurrentThreadControls((current) => ({
       ...current,
       fullAccess: !current.fullAccess,
@@ -225,6 +235,8 @@ export function useComposerState(options: UseComposerStateOptions) {
     composerControlDraft,
     composerControlsDisabled,
     composerValue,
+    composerDrafts,
+    defaultPermissionMode,
     focusToken,
     formatReasoningEffort,
     hasComposerText,
@@ -244,6 +256,7 @@ export function useComposerState(options: UseComposerStateOptions) {
     selectComposerModel,
     setComposerBusy,
     setComposerValue,
+    setDefaultPermissionMode,
     setThreadPermissionBaselines,
     toggleFullAccess,
   };

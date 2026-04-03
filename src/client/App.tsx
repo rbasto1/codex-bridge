@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import {
@@ -40,6 +40,7 @@ import type { RequestResponseBody, ThreadMode } from "../types";
 
 export default function App() {
   const initialUi = usePersistedUi();
+  const hasPersistedUiRef = useRef(false);
 
   const {
     activeThreadId,
@@ -111,6 +112,10 @@ export default function App() {
   const [respondingRequestKey, setRespondingRequestKey] = useState<string | null>(null);
   const [selectionRestored, setSelectionRestored] = useState(false);
   const [threadLoadingId, setThreadLoadingId] = useState<string | null>(null);
+  const [draftThreadsRestored, setDraftThreadsRestored] = useState(false);
+  const [doneThreadIds, setDoneThreadIds] = useState<Record<string, true>>(
+    Object.fromEntries((initialUi.doneThreadIds ?? []).map((id) => [id, true])),
+  );
   const currentThreadIsUiDraft = isUiOnlyThread(currentThread);
 
   const composer = useComposerState({
@@ -178,21 +183,49 @@ export default function App() {
   });
 
   useEffect(() => {
+    if (draftThreadsRestored) {
+      return;
+    }
+
+    const uiDraftThreads = (initialUi.draftThreads ?? []).filter(isUiOnlyThread);
+    if (uiDraftThreads.length > 0) {
+      startTransition(() => {
+        replaceThreads(uiDraftThreads);
+      });
+    }
+    setDraftThreadsRestored(true);
+  }, [draftThreadsRestored, initialUi.draftThreads, replaceThreads]);
+
+  useEffect(() => {
+    if (!hasPersistedUiRef.current) {
+      hasPersistedUiRef.current = true;
+      return;
+    }
+
+    const draftThreads = Object.values(threadsById).filter(isUiOnlyThread);
     writePersistedUi({
       activeThreadId,
       activeMode: activeThreadId ? currentMode : undefined,
       currentProject: projectManager.currentProject,
       customProjects: projectManager.customProjects,
+      draftThreads,
+      composerDrafts: composer.composerDrafts,
+      doneThreadIds: Object.keys(doneThreadIds),
+      defaultPermissionMode: composer.defaultPermissionMode,
       threadControlDrafts: composer.threadControlDrafts,
       threadPermissionBaselines: composer.threadPermissionBaselines,
     });
   }, [
     activeThreadId,
+    composer.composerDrafts,
+    composer.defaultPermissionMode,
     composer.threadControlDrafts,
     composer.threadPermissionBaselines,
     currentMode,
+    doneThreadIds,
     projectManager.currentProject,
     projectManager.customProjects,
+    threadsById,
   ]);
 
   useEffect(() => {
@@ -253,6 +286,18 @@ export default function App() {
       setActionError(getErrorMessage(error));
       throw error;
     }
+  }
+
+  function handleToggleThreadDone(threadId: string) {
+    setDoneThreadIds((previous) => {
+      const next = { ...previous };
+      if (next[threadId]) {
+        delete next[threadId];
+      } else {
+        next[threadId] = true;
+      }
+      return next;
+    });
   }
 
   async function handleSubmitComposer() {
@@ -411,6 +456,7 @@ export default function App() {
         threadOrder={threadOrder}
         threadsById={threadsById}
         visibleProjects={projectManager.visibleProjects}
+        doneThreadIds={doneThreadIds}
         onAddProject={projectManager.addProject}
         onHideProject={projectManager.hideProject}
         onOpenThread={(threadId, mode) => void openThread(threadId, mode)}
@@ -422,6 +468,7 @@ export default function App() {
         onStartThread={() => void handleStartThread()}
         onUnhideProject={projectManager.unhideProject}
         onUploadProjectIcon={projectManager.saveProjectIcon}
+        onToggleThreadDone={handleToggleThreadDone}
       />
 
       <main className="workspace">

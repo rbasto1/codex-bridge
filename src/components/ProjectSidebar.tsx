@@ -1,6 +1,7 @@
 import { useDeferredValue, useRef, useState, type DragEvent } from "react";
 
 import codexLogoUrl from "../../codex.svg";
+import { useAppStore } from "../client/store";
 import { encodeProjectId, formatProjectTileLabel } from "../lib/projects";
 import { useSidebarState } from "../hooks/useSidebarState";
 import type { ProjectContextMenuState, ProjectSidebarProps } from "../types";
@@ -22,6 +23,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
     threadOrder,
     threadsById,
     visibleProjects,
+    doneThreadIds,
     onAddProject,
     onHideProject,
     onOpenThread,
@@ -33,7 +35,9 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
     onStartThread,
     onUnhideProject,
     onUploadProjectIcon,
+    onToggleThreadDone,
   } = props;
+  const unreadThreadIds = useAppStore((state) => state.unreadThreadIds);
 
   const { isMobileViewport, sidebarCollapsed, setSidebarCollapsed, toggleSidebar } = useSidebarState();
   const [searchTerm, setSearchTerm] = useState("");
@@ -166,6 +170,10 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
               const stateEntry = projectState.find((entry) => entry.id === project);
               const tileLabel = formatProjectTileLabel(stateEntry?.name || project);
               const isDragOver = dragOverProject === project && draggedProject !== project;
+              const projectHasUnread = threadOrder.some((threadId) => {
+                const thread = threadsById[threadId];
+                return thread?.cwd === project && Boolean(unreadThreadIds[threadId]) && thread.status.type !== "active";
+              });
 
               return (
                 <div
@@ -214,6 +222,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
                         className="project-tile-icon"
                       />
                     ) : tileLabel}
+                    {projectHasUnread ? <span className="project-unread-dot" /> : null}
                   </button>
                 </div>
               );
@@ -314,7 +323,10 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
                 key={threadId}
                 threadId={threadId}
                 active={threadId === activeThreadId}
+                done={Boolean(doneThreadIds[threadId])}
+                showUnread={Boolean(unreadThreadIds[threadId]) && threadId !== activeThreadId}
                 onOpen={() => openThread(threadId)}
+                onToggleDone={() => onToggleThreadDone(threadId)}
               />
             ))}
             {!listLoading && filteredThreadIds.length === 0 ? (
