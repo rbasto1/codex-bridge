@@ -127,7 +127,7 @@ export function useComposerState(options: UseComposerStateOptions) {
   }, [activeThreadId, currentThreadSessionConfig]);
 
   useEffect(() => {
-    if (!activeThreadId || !currentThread) {
+    if (!activeThreadId || !currentThread || composerControlDraft) {
       return;
     }
 
@@ -141,13 +141,14 @@ export function useComposerState(options: UseComposerStateOptions) {
         return previous;
       }
       nextDraft.fullAccess = defaultPermissionMode === "full";
+      nextDraft.updatedAt = Date.now();
 
       return {
         ...previous,
         [activeThreadId]: nextDraft,
       };
     });
-  }, [activeThreadId, availableModels, currentThread, currentThreadSessionConfig, defaultPermissionMode]);
+  }, [activeThreadId, availableModels, composerControlDraft, currentThread, currentThreadSessionConfig, defaultPermissionMode]);
 
   function setComposerValue(value: string) {
     if (!activeThreadId) {
@@ -167,7 +168,10 @@ export function useComposerState(options: UseComposerStateOptions) {
 
     setThreadControlDrafts((previous) => ({
       ...previous,
-      [activeThreadId]: updater(previous[activeThreadId] ?? composerControlDraft),
+      [activeThreadId]: {
+        ...updater(previous[activeThreadId] ?? composerControlDraft),
+        updatedAt: Date.now(),
+      },
     }));
   }
 

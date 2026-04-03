@@ -38,6 +38,7 @@ export interface ComposerControlDraft {
   model: string;
   effort: ReasoningEffort | null;
   fullAccess: boolean;
+  updatedAt?: number;
 }
 
 export interface ModelChoice {

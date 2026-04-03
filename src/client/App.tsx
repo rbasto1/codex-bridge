@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import {
@@ -40,6 +40,7 @@ import type { RequestResponseBody, ThreadMode } from "../types";
 
 export default function App() {
   const initialUi = usePersistedUi();
+  const hasPersistedUiRef = useRef(false);
 
   const {
     activeThreadId,
@@ -196,6 +197,11 @@ export default function App() {
   }, [draftThreadsRestored, initialUi.draftThreads, replaceThreads]);
 
   useEffect(() => {
+    if (!hasPersistedUiRef.current) {
+      hasPersistedUiRef.current = true;
+      return;
+    }
+
     const draftThreads = Object.values(threadsById).filter(isUiOnlyThread);
     writePersistedUi({
       activeThreadId,
