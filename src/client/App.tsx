@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import {
@@ -41,6 +41,7 @@ import type { RequestResponseBody, ThreadMode } from "../types";
 export default function App() {
   const initialUi = usePersistedUi();
   const hasPersistedUiRef = useRef(false);
+  const openThreadRef = useRef<((threadId: string, mode: ThreadMode) => Promise<void>) | null>(null);
 
   const {
     activeThreadId,
@@ -113,9 +114,6 @@ export default function App() {
   const [selectionRestored, setSelectionRestored] = useState(false);
   const [threadLoadingId, setThreadLoadingId] = useState<string | null>(null);
   const [draftThreadsRestored, setDraftThreadsRestored] = useState(false);
-  const [doneThreadIds, setDoneThreadIds] = useState<Record<string, true>>(
-    Object.fromEntries((initialUi.doneThreadIds ?? []).map((id) => [id, true])),
-  );
   const currentThreadIsUiDraft = isUiOnlyThread(currentThread);
 
   const composer = useComposerState({
@@ -131,7 +129,7 @@ export default function App() {
     setActionError,
   });
 
-  async function openThread(threadId: string, mode: ThreadMode) {
+  const openThread = useCallback(async (threadId: string, mode: ThreadMode) => {
     const thread = useAppStore.getState().threadsById[threadId];
     if (isUiOnlyThread(thread)) {
       composer.focusComposer();
@@ -164,7 +162,11 @@ export default function App() {
     } finally {
       setThreadLoadingId(null);
     }
-  }
+  }, [composer, hydrateThread, setSelectedThreadError]);
+
+  useEffect(() => {
+    openThreadRef.current = openThread;
+  }, [openThread]);
 
   const projectManager = useProjectManager({
     initialUi,
@@ -210,7 +212,6 @@ export default function App() {
       customProjects: projectManager.customProjects,
       draftThreads,
       composerDrafts: composer.composerDrafts,
-      doneThreadIds: Object.keys(doneThreadIds),
       defaultPermissionMode: composer.defaultPermissionMode,
       threadControlDrafts: composer.threadControlDrafts,
       threadPermissionBaselines: composer.threadPermissionBaselines,
@@ -222,7 +223,6 @@ export default function App() {
     composer.threadControlDrafts,
     composer.threadPermissionBaselines,
     currentMode,
-    doneThreadIds,
     projectManager.currentProject,
     projectManager.customProjects,
     threadsById,
@@ -242,7 +242,7 @@ export default function App() {
       const mode: ThreadMode = hashThreadId && hashThreadId === restoreThreadId
         ? "live"
         : (initialUi.activeMode ?? "replay");
-      void openThread(restoreThreadId, mode);
+      void openThreadRef.current?.(restoreThreadId, mode);
     }
   }, [initialUi.activeMode, initialUi.activeThreadId, selectionRestored, threadOrder.length, threadsById]);
 
@@ -286,18 +286,6 @@ export default function App() {
       setActionError(getErrorMessage(error));
       throw error;
     }
-  }
-
-  function handleToggleThreadDone(threadId: string) {
-    setDoneThreadIds((previous) => {
-      const next = { ...previous };
-      if (next[threadId]) {
-        delete next[threadId];
-      } else {
-        next[threadId] = true;
-      }
-      return next;
-    });
   }
 
   async function handleSubmitComposer() {
@@ -445,6 +433,7 @@ export default function App() {
     <div className="app-shell">
       <ProjectSidebar
         activeThreadId={activeThreadId}
+        availableTags={projectManager.projectTags}
         backendStatus={backendStatus}
         currentProject={projectManager.currentProject}
         hiddenProjects={projectManager.hiddenProjects}
@@ -453,11 +442,12 @@ export default function App() {
         projectIconVersions={projectManager.projectIconVersions}
         projectOptions={projectManager.projectOptions}
         projectState={projectManager.projectState}
+        sessionStateByThreadId={projectManager.projectSessionStateByThreadId}
         threadOrder={threadOrder}
         threadsById={threadsById}
         visibleProjects={projectManager.visibleProjects}
-        doneThreadIds={doneThreadIds}
         onAddProject={projectManager.addProject}
+        onCreateTag={projectManager.createTag}
         onHideProject={projectManager.hideProject}
         onOpenThread={(threadId, mode) => void openThread(threadId, mode)}
         onRemoveProject={projectManager.removeProject}
@@ -466,9 +456,11 @@ export default function App() {
         onSaveProjectName={projectManager.saveProjectName}
         onSelectProject={(project) => void projectManager.selectProject(project)}
         onStartThread={() => void handleStartThread()}
+        onToggleThreadArchived={projectManager.toggleThreadArchived}
         onUnhideProject={projectManager.unhideProject}
         onUploadProjectIcon={projectManager.saveProjectIcon}
-        onToggleThreadDone={handleToggleThreadDone}
+        onToggleThreadDone={projectManager.toggleThreadDone}
+        onToggleThreadTag={projectManager.toggleThreadTag}
       />
 
       <main className="workspace">

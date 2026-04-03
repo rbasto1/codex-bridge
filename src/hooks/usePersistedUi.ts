@@ -12,18 +12,7 @@ export function usePersistedUi(value?: PersistedUi) {
     }
 
     writePersistedUi(value);
-  }, [
-    value?.activeMode,
-    value?.activeThreadId,
-    value?.composerDrafts,
-    value?.currentProject,
-    value?.customProjects,
-    value?.defaultPermissionMode,
-    value?.doneThreadIds,
-    value?.draftThreads,
-    value?.threadControlDrafts,
-    value?.threadPermissionBaselines,
-  ]);
+  }, [value]);
 
   return initialUi;
 }

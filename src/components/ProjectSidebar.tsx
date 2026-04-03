@@ -14,17 +14,19 @@ import { SessionRow } from "./SessionRow";
 export function ProjectSidebar(props: ProjectSidebarProps) {
   const {
     activeThreadId,
+    availableTags,
     backendStatus,
     currentProject,
     listLoading,
     overflowProjects,
     projectIconVersions,
     projectState,
+    sessionStateByThreadId,
     threadOrder,
     threadsById,
     visibleProjects,
-    doneThreadIds,
     onAddProject,
+    onCreateTag,
     onHideProject,
     onOpenThread,
     onRemoveProject,
@@ -33,15 +35,18 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
     onSaveProjectName,
     onSelectProject,
     onStartThread,
+    onToggleThreadArchived,
     onUnhideProject,
     onUploadProjectIcon,
     onToggleThreadDone,
+    onToggleThreadTag,
   } = props;
   const unreadThreadIds = useAppStore((state) => state.unreadThreadIds);
 
   const { isMobileViewport, sidebarCollapsed, setSidebarCollapsed, toggleSidebar } = useSidebarState();
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddProjectModal, setShowAddProjectModal] = useState(false);
+  const [showArchivedSessions, setShowArchivedSessions] = useState(false);
   const [showHiddenProjects, setShowHiddenProjects] = useState(false);
   const [contextMenuProject, setContextMenuProject] = useState<ProjectContextMenuState | null>(null);
   const [editingProject, setEditingProject] = useState<string | null>(null);
@@ -67,6 +72,9 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
     const haystack = [thread.name ?? "", thread.preview, thread.cwd].join(" ").toLowerCase();
     return haystack.includes(deferredSearchTerm);
   });
+  const visibleThreadIds = filteredThreadIds.filter((threadId) => !sessionStateByThreadId[threadId]?.archived);
+  const archivedThreadIds = filteredThreadIds.filter((threadId) => sessionStateByThreadId[threadId]?.archived);
+  const displayedThreadIds = showArchivedSessions ? [...visibleThreadIds, ...archivedThreadIds] : visibleThreadIds;
 
   const sidebarProjectLabel = (() => {
     if (!currentProject) {
@@ -318,17 +326,35 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
           </div>
 
           <div className="session-list">
-            {filteredThreadIds.map((threadId) => (
+            {displayedThreadIds.map((threadId) => {
+              const activeTagNames = sessionStateByThreadId[threadId]?.tags ?? [];
+              const activeTags = availableTags.filter((tag) => activeTagNames.includes(tag.name));
+              return (
               <SessionRow
                 key={threadId}
                 threadId={threadId}
                 active={threadId === activeThreadId}
-                done={Boolean(doneThreadIds[threadId])}
+                archived={Boolean(sessionStateByThreadId[threadId]?.archived)}
+                availableTags={availableTags}
+                tags={activeTags}
                 showUnread={Boolean(unreadThreadIds[threadId]) && threadId !== activeThreadId}
                 onOpen={() => openThread(threadId)}
+                onToggleArchived={() => onToggleThreadArchived(threadId)}
                 onToggleDone={() => onToggleThreadDone(threadId)}
+                onToggleTag={(tagName) => onToggleThreadTag(threadId, tagName)}
+                onCreateTag={onCreateTag}
               />
-            ))}
+              );
+            })}
+            {!showArchivedSessions && archivedThreadIds.length > 0 ? (
+              <button
+                type="button"
+                className="session-load-more"
+                onClick={() => setShowArchivedSessions(true)}
+              >
+                Load more ({archivedThreadIds.length} archived)
+              </button>
+            ) : null}
             {!listLoading && filteredThreadIds.length === 0 ? (
               <div className="empty-card small-empty">No sessions match the current project.</div>
             ) : null}

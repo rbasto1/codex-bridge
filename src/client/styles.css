@@ -451,14 +451,10 @@ button {
 
 .session-row {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  align-items: stretch;
   width: 100%;
-  padding: 8px 10px;
-  border: none;
   border-radius: var(--radius-sm);
   background: transparent;
-  text-align: left;
   transition: background-color 0.15s ease;
   position: relative;
 }
@@ -469,6 +465,26 @@ button {
 
 .session-row.active {
   background: rgba(255, 255, 255, 0.075);
+}
+
+.session-row-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 4px 8px 10px;
+  border: none;
+  background: transparent;
+  text-align: left;
+}
+
+.session-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px 8px 0;
+  flex: 0 0 auto;
 }
 
 .session-indicator {
@@ -495,9 +511,10 @@ button {
   width: 14px;
   height: 14px;
   margin-top: 0;
+  margin-right: -8px;
   border-radius: 0;
   background: transparent;
-  color: var(--color-success);
+  color: var(--text-weak);
   font-size: 13px;
   font-weight: 700;
 }
@@ -542,12 +559,12 @@ button {
 
 .session-name.done {
   color: var(--text-weak);
-  text-decoration: line-through;
 }
 
 .session-meta {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
   font-size: 12px;
   color: var(--text-weaker);
   white-space: nowrap;
@@ -555,8 +572,26 @@ button {
   text-overflow: ellipsis;
 }
 
+.session-tag-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.session-tag-dot {
+  width: 8px;
+  height: 8px;
+  display: inline-flex;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.session-tag-picker-wrap {
+  position: relative;
+}
+
+.session-tag-toggle,
 .session-done-toggle {
-  margin-left: auto;
   width: 20px;
   height: 20px;
   display: inline-flex;
@@ -572,14 +607,122 @@ button {
   padding: 0;
 }
 
+.session-tag-toggle:hover,
+.session-tag-toggle.open,
 .session-done-toggle:hover {
   color: var(--text-base);
   border-color: var(--border-weak);
   background: var(--surface-base-hover);
 }
 
-.session-done-toggle.done {
-  color: var(--color-success);
+.session-tag-glyph {
+  width: 14px;
+  height: 14px;
+}
+
+.session-tag-picker {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border-weak);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.session-tag-option,
+.session-tag-add,
+.session-tag-create-submit {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-weak);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-base);
+  text-align: left;
+}
+
+.session-tag-option:hover,
+.session-tag-add:hover,
+.session-tag-create-submit:hover {
+  background: var(--surface-base-hover);
+}
+
+.session-tag-option.active {
+  border-color: var(--border-selected);
+}
+
+.session-tag-option-label {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.session-tag-add {
+  justify-content: center;
+  font-size: 16px;
+}
+
+.session-tag-create {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.session-tag-input {
+  width: 100%;
+}
+
+.session-tag-colors {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.session-tag-color-swatch {
+  width: 100%;
+  height: 24px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+}
+
+.session-tag-color-swatch.active {
+  border-color: var(--text-strong);
+}
+
+.session-tag-error {
+  font-size: 12px;
+  color: var(--color-error);
+}
+
+.session-load-more {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-weak);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-weak);
+  text-align: left;
+}
+
+.session-load-more:hover {
+  background: var(--surface-base-hover);
+}
+
+.session-done-toggle {
+  margin-left: 0;
 }
 
 /* session-time removed — time now shown in session-meta */

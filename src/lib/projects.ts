@@ -4,6 +4,10 @@ export function encodeProjectId(project: string): string {
   return btoa(project).replace(/[/+=]/g, "_");
 }
 
+export function encodeProjectStateId(project: string): string {
+  return project.replace(/-/g, "--").replace(/\//g, "-");
+}
+
 export function formatProjectTileLabel(project: string): string {
   const baseName = project.split("/").filter(Boolean).pop() ?? project;
   const parts = baseName.split(/[^a-zA-Z0-9]+/).filter(Boolean);

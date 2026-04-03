@@ -14,6 +14,8 @@ import {
 import type {
   ModelListResponse,
   ModelOption,
+  ProjectSessionStateResponse,
+  ProjectSessionStateSaveData,
   ProjectStateResponse,
   ProjectStateSaveData,
   ServerRequestResponsePayload,
@@ -190,6 +192,20 @@ export async function saveProjectState(data: ProjectStateSaveData): Promise<void
   await requestJson("/api/projects/state", {
     method: "POST",
     body: JSON.stringify(data),
+  });
+}
+
+export async function fetchProjectSessionState(project: string): Promise<ProjectSessionStateResponse> {
+  return requestJson<ProjectSessionStateResponse>(`/api/projects/session-state?project=${encodeURIComponent(project)}`);
+}
+
+export async function saveProjectSessionState(project: string, data: ProjectSessionStateSaveData): Promise<void> {
+  await requestJson("/api/projects/session-state", {
+    method: "POST",
+    body: JSON.stringify({
+      project,
+      ...data,
+    }),
   });
 }
 

@@ -25,6 +25,8 @@ const RPC_METHODS = [
 
 const bridge = new CodexAppServerBridge();
 const app = express();
+const DEFAULT_PROJECT_STATE = { projects: [], hidden: [], tags: [{ name: "done", color: "#22c55e" }] };
+const DEFAULT_PROJECT_SESSION_STATE = { threads: {} };
 
 // Icon upload route MUST be registered before express.json() to avoid body consumption
 app.post("/api/projects/icons/:projectId", express.raw({ type: "image/*", limit: "1mb" }), (request, response) => {
@@ -196,13 +198,77 @@ function ensureCodexDir() {
   mkdirSync(path.join(CODEX_DIR, "icons"), { recursive: true });
 }
 
+function projectStateFilePath(project: string): string {
+  return path.join(CODEX_DIR, `state-${encodeProjectStateId(project)}.json`);
+}
+
+function encodeProjectStateId(project: string): string {
+  return project.replace(/-/g, "--").replace(/\//g, "-");
+}
+
+function readJsonFile<T>(filePath: string, fallback: T): T {
+  try {
+    return JSON.parse(readFileSync(filePath, "utf-8")) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function sanitizeProjectState(value: unknown) {
+  const record = isRecord(value) ? value : {};
+  return {
+    projects: Array.isArray(record.projects)
+      ? record.projects.filter((entry): entry is { id: string; name: string } => (
+        isRecord(entry) && typeof entry.id === "string" && typeof entry.name === "string"
+      ))
+      : DEFAULT_PROJECT_STATE.projects,
+    hidden: Array.isArray(record.hidden)
+      ? record.hidden.filter((entry): entry is string => typeof entry === "string")
+      : DEFAULT_PROJECT_STATE.hidden,
+    tags: sanitizeTagDefinitions(record.tags),
+  };
+}
+
+function sanitizeProjectSessionState(value: unknown) {
+  const record = isRecord(value) ? value : {};
+  const rawThreads = isRecord(record.threads) ? record.threads : {};
+  return {
+    threads: Object.fromEntries(
+      Object.entries(rawThreads).flatMap(([threadId, threadState]) => {
+        if (!isRecord(threadState)) {
+          return [];
+        }
+
+        const tags = Array.isArray(threadState.tags)
+          ? threadState.tags.filter((tag): tag is string => typeof tag === "string")
+          : [];
+        const archived = typeof threadState.archived === "boolean" ? threadState.archived : false;
+        if (tags.length === 0 && !archived) {
+          return [];
+        }
+
+        return [[threadId, { tags, ...(archived ? { archived: true } : {}) }]];
+      }),
+    ),
+  };
+}
+
+function sanitizeTagDefinitions(value: unknown): Array<{ name: string; color: string }> {
+  const tags = Array.isArray(value)
+    ? value.filter((entry): entry is { name: string; color: string } => (
+      isRecord(entry)
+      && typeof entry.name === "string"
+      && typeof entry.color === "string"
+      && /^#[0-9a-fA-F]{6}$/.test(entry.color)
+    ))
+    : [];
+  return tags.some((tag) => tag.name === "done") ? tags : [...tags, DEFAULT_PROJECT_STATE.tags[0]];
+}
+
 app.get("/api/projects/state", (_request, response) => {
   ensureCodexDir();
   const filePath = path.join(CODEX_DIR, "state.json");
-  let data: Record<string, unknown> = { projects: [], hidden: [] };
-  try {
-    data = JSON.parse(readFileSync(filePath, "utf-8")) as Record<string, unknown>;
-  } catch { /* use defaults */ }
+  const data = sanitizeProjectState(readJsonFile(filePath, DEFAULT_PROJECT_STATE));
   // Include list of project IDs that have icon files
   const iconsDir = path.join(CODEX_DIR, "icons");
   let iconIds: string[] = [];
@@ -213,7 +279,32 @@ app.get("/api/projects/state", (_request, response) => {
 app.post("/api/projects/state", (request, response) => {
   ensureCodexDir();
   const filePath = path.join(CODEX_DIR, "state.json");
-  writeFileSync(filePath, JSON.stringify(request.body, null, 2));
+  writeFileSync(filePath, JSON.stringify(sanitizeProjectState(request.body), null, 2));
+  response.json({ ok: true });
+});
+
+app.get("/api/projects/session-state", (request, response) => {
+  ensureCodexDir();
+  const project = request.query.project;
+  if (typeof project !== "string" || project.length === 0) {
+    response.status(400).json({ error: { code: -32000, message: "project query parameter is required." } });
+    return;
+  }
+
+  response.json(sanitizeProjectSessionState(readJsonFile(projectStateFilePath(project), DEFAULT_PROJECT_SESSION_STATE)));
+});
+
+app.post("/api/projects/session-state", (request, response) => {
+  ensureCodexDir();
+  if (!isRecord(request.body) || typeof request.body.project !== "string") {
+    response.status(400).json({ error: { code: -32000, message: "project is required." } });
+    return;
+  }
+
+  writeFileSync(
+    projectStateFilePath(request.body.project),
+    JSON.stringify(sanitizeProjectSessionState(request.body), null, 2),
+  );
   response.json({ ok: true });
 });
 

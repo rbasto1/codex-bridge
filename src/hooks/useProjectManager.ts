@@ -3,13 +3,34 @@ import { useEffect, useState } from "react";
 import {
   deleteProjectIcon,
   fetchEnvHome,
+  fetchProjectSessionState,
   fetchProjectState,
+  saveProjectSessionState,
   saveProjectState,
   uploadProjectIcon,
 } from "../client/api";
 import { resizeImageFileToPngBlob, encodeProjectId, reorderProjectEntries } from "../lib/projects";
 import { getErrorMessage } from "../lib/errors";
-import type { ProjectStateEntry, UseProjectManagerOptions } from "../types";
+import type {
+  ProjectSessionStateSaveData,
+  ProjectStateEntry,
+  TagDefinition,
+  UseProjectManagerOptions,
+} from "../types";
+
+const DONE_TAG: TagDefinition = { name: "done", color: "#22c55e" };
+
+function normalizeTags(tags: TagDefinition[]): TagDefinition[] {
+  return tags.some((tag) => tag.name === DONE_TAG.name) ? tags : [...tags, DONE_TAG];
+}
+
+function normalizeSessionState(state?: ProjectSessionStateSaveData): ProjectSessionStateSaveData {
+  return { threads: state?.threads ?? {} };
+}
+
+function isHexColor(value: string): boolean {
+  return /^#[0-9a-fA-F]{6}$/.test(value);
+}
 
 export function useProjectManager(options: UseProjectManagerOptions) {
   const {
@@ -27,6 +48,8 @@ export function useProjectManager(options: UseProjectManagerOptions) {
   const [hiddenProjects, setHiddenProjects] = useState<string[]>([]);
   const [projectIconVersions, setProjectIconVersions] = useState<Record<string, number>>({});
   const [projectState, setProjectState] = useState<ProjectStateEntry[]>([]);
+  const [projectTags, setProjectTags] = useState<TagDefinition[]>([DONE_TAG]);
+  const [projectSessionStates, setProjectSessionStates] = useState<Record<string, ProjectSessionStateSaveData>>({});
 
   const projectOptions = Array.from(
     new Set(
@@ -44,6 +67,7 @@ export function useProjectManager(options: UseProjectManagerOptions) {
         ...visibleProjectsUnordered.filter((projectId) => !projectState.some((entry) => entry.id === projectId)),
       ];
   const overflowProjects = projectOptions.filter((project) => hiddenProjects.includes(project));
+  const currentProjectSessionState = normalizeSessionState(projectSessionStates[currentProject]);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +89,7 @@ export function useProjectManager(options: UseProjectManagerOptions) {
         if (!cancelled) {
           setProjectState(state.projects ?? []);
           setHiddenProjects(state.hidden ?? []);
+          setProjectTags(normalizeTags(state.tags ?? []));
 
           const versions: Record<string, number> = {};
           for (const id of state.iconIds ?? []) {
@@ -83,6 +108,37 @@ export function useProjectManager(options: UseProjectManagerOptions) {
   }, []);
 
   useEffect(() => {
+    if (!currentProject || projectSessionStates[currentProject]) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const state = await fetchProjectSessionState(currentProject);
+        if (!cancelled) {
+          setProjectSessionStates((previous) => ({
+            ...previous,
+            [currentProject]: normalizeSessionState(state),
+          }));
+        }
+      } catch {
+        if (!cancelled) {
+          setProjectSessionStates((previous) => ({
+            ...previous,
+            [currentProject]: normalizeSessionState(),
+          }));
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentProject, projectSessionStates]);
+
+  useEffect(() => {
     if (projectOptions.length === 0) {
       return;
     }
@@ -94,8 +150,12 @@ export function useProjectManager(options: UseProjectManagerOptions) {
     setCurrentProject(projectOptions[0]);
   }, [currentProject, projectOptions]);
 
-  function persistProjectState(projects: ProjectStateEntry[], hidden: string[]) {
-    void saveProjectState({ projects, hidden });
+  function persistProjectState(projects: ProjectStateEntry[], hidden: string[], tags: TagDefinition[]) {
+    void saveProjectState({ projects, hidden, tags });
+  }
+
+  function persistProjectSessionState(project: string, state: ProjectSessionStateSaveData) {
+    void saveProjectSessionState(project, state);
   }
 
   async function selectProject(project: string) {
@@ -142,7 +202,7 @@ export function useProjectManager(options: UseProjectManagerOptions) {
   function hideProject(project: string) {
     setHiddenProjects((previous) => {
       const next = previous.includes(project) ? previous : [...previous, project];
-      persistProjectState(projectState, next);
+      persistProjectState(projectState, next, projectTags);
       return next;
     });
 
@@ -157,7 +217,7 @@ export function useProjectManager(options: UseProjectManagerOptions) {
   function unhideProject(project: string) {
     setHiddenProjects((previous) => {
       const next = previous.filter((entry) => entry !== project);
-      persistProjectState(projectState, next);
+      persistProjectState(projectState, next, projectTags);
       return next;
     });
   }
@@ -174,7 +234,7 @@ export function useProjectManager(options: UseProjectManagerOptions) {
         next.push(nextEntry);
       }
 
-      persistProjectState(next, hiddenProjects);
+      persistProjectState(next, hiddenProjects, projectTags);
       return next;
     });
   }
@@ -182,9 +242,94 @@ export function useProjectManager(options: UseProjectManagerOptions) {
   function reorderProjects(projects: string[]) {
     setProjectState((previous) => {
       const next = reorderProjectEntries(projects, previous);
-      persistProjectState(next, hiddenProjects);
+      persistProjectState(next, hiddenProjects, projectTags);
       return next;
     });
+  }
+
+  function createTag(name: string, color: string): string | null {
+    const nextName = name.trim();
+    const nextColor = color.trim();
+
+    if (!nextName) {
+      return "Tag name is required.";
+    }
+
+    if (!isHexColor(nextColor)) {
+      return "Tag color must be a 6-digit hex value.";
+    }
+
+    if (projectTags.some((tag) => tag.name.toLowerCase() === nextName.toLowerCase())) {
+      return "A tag with that name already exists.";
+    }
+
+    const nextTags = [...projectTags, { name: nextName, color: nextColor }];
+    setProjectTags(nextTags);
+    persistProjectState(projectState, hiddenProjects, nextTags);
+    return null;
+  }
+
+  function updateCurrentProjectSessionState(
+    updater: (state: ProjectSessionStateSaveData) => ProjectSessionStateSaveData,
+  ) {
+    if (!currentProject) {
+      return;
+    }
+
+    setProjectSessionStates((previous) => {
+      const currentState = normalizeSessionState(previous[currentProject]);
+      const nextState = updater(currentState);
+      const normalizedState = normalizeSessionState(nextState);
+      persistProjectSessionState(currentProject, normalizedState);
+      return {
+        ...previous,
+        [currentProject]: normalizedState,
+      };
+    });
+  }
+
+  function updateThreadSessionState(threadId: string, updater: (state: { archived?: boolean; tags?: string[] }) => { archived?: boolean; tags?: string[] }) {
+    updateCurrentProjectSessionState((state) => {
+      const currentThreadState = state.threads[threadId] ?? {};
+      const nextThreadState = updater(currentThreadState);
+      const nextTags = Array.from(new Set((nextThreadState.tags ?? []).filter(Boolean)));
+      const nextArchived = Boolean(nextThreadState.archived);
+      const threads = { ...state.threads };
+
+      if (nextTags.length === 0 && !nextArchived) {
+        delete threads[threadId];
+      } else {
+        threads[threadId] = {
+          ...(nextArchived ? { archived: true } : {}),
+          ...(nextTags.length > 0 ? { tags: nextTags } : {}),
+        };
+      }
+
+      return { threads };
+    });
+  }
+
+  function toggleThreadTag(threadId: string, tagName: string) {
+    updateThreadSessionState(threadId, (state) => {
+      const tags = new Set(state.tags ?? []);
+      if (tags.has(tagName)) {
+        tags.delete(tagName);
+      } else {
+        tags.add(tagName);
+      }
+      return { ...state, tags: Array.from(tags) };
+    });
+  }
+
+  function toggleThreadDone(threadId: string) {
+    toggleThreadTag(threadId, DONE_TAG.name);
+  }
+
+  function toggleThreadArchived(threadId: string) {
+    updateThreadSessionState(threadId, (state) => ({
+      ...state,
+      archived: !state.archived,
+    }));
   }
 
   async function saveProjectIcon(project: string, file: File) {
@@ -226,8 +371,11 @@ export function useProjectManager(options: UseProjectManagerOptions) {
     projectIconVersions,
     projectOptions,
     projectState,
+    projectTags,
+    projectSessionStateByThreadId: currentProjectSessionState.threads,
     visibleProjects,
     addProject,
+    createTag,
     hideProject,
     removeProject,
     removeProjectIcon,
@@ -236,6 +384,9 @@ export function useProjectManager(options: UseProjectManagerOptions) {
     saveProjectName,
     selectProject,
     setCurrentProject,
+    toggleThreadArchived,
+    toggleThreadDone,
+    toggleThreadTag,
     unhideProject,
   };
 }

@@ -27,10 +27,19 @@ export interface PersistedUi {
   customProjects?: string[];
   draftThreads?: Thread[];
   composerDrafts?: Record<string, string>;
-  doneThreadIds?: string[];
   defaultPermissionMode?: "standard" | "full";
   threadControlDrafts?: Record<string, ComposerControlDraft>;
   threadPermissionBaselines?: Record<string, PermissionBaseline>;
+}
+
+export interface TagDefinition {
+  name: string;
+  color: string;
+}
+
+export interface ProjectThreadState {
+  archived?: boolean;
+  tags?: string[];
 }
 
 export interface ComposerControlDraft {
@@ -125,11 +134,21 @@ export interface ProjectStateResponse {
   projects: ProjectStateEntry[];
   hidden: string[];
   iconIds: string[];
+  tags: TagDefinition[];
 }
 
 export interface ProjectStateSaveData {
   projects: ProjectStateEntry[];
   hidden: string[];
+  tags: TagDefinition[];
+}
+
+export interface ProjectSessionStateResponse {
+  threads: Record<string, ProjectThreadState>;
+}
+
+export interface ProjectSessionStateSaveData {
+  threads: Record<string, ProjectThreadState>;
 }
 
 export interface AppStore {
@@ -170,10 +189,15 @@ export interface AppStore {
 export interface SessionRowProps {
   threadId: string;
   active: boolean;
-  done: boolean;
+  archived: boolean;
+  availableTags: TagDefinition[];
+  tags: TagDefinition[];
   showUnread: boolean;
   onOpen: () => void;
   onToggleDone: () => void;
+  onToggleArchived: () => void;
+  onToggleTag: (tagName: string) => void;
+  onCreateTag: (name: string, color: string) => string | null;
 }
 
 export interface TranscriptViewProps {
@@ -260,6 +284,7 @@ export interface ProjectContextMenuState {
 
 export interface ProjectSidebarProps {
   activeThreadId: string | null;
+  availableTags: TagDefinition[];
   backendStatus: AppServerStatus;
   currentProject: string;
   hiddenProjects: string[];
@@ -268,11 +293,12 @@ export interface ProjectSidebarProps {
   projectIconVersions: Record<string, number>;
   projectOptions: string[];
   projectState: ProjectStateEntry[];
+  sessionStateByThreadId: Record<string, ProjectThreadState>;
   threadOrder: string[];
   threadsById: Record<string, Thread>;
   visibleProjects: string[];
-  doneThreadIds: Record<string, true>;
   onAddProject: (project: string) => void;
+  onCreateTag: (name: string, color: string) => string | null;
   onHideProject: (project: string) => void;
   onOpenThread: (threadId: string, mode: ThreadMode) => void;
   onRemoveProject: (project: string) => void;
@@ -281,9 +307,11 @@ export interface ProjectSidebarProps {
   onSaveProjectName: (project: string, name: string) => void;
   onSelectProject: (project: string) => void;
   onStartThread: () => void;
+  onToggleThreadArchived: (threadId: string) => void;
   onUnhideProject: (project: string) => void;
   onUploadProjectIcon: (project: string, file: File) => Promise<void>;
   onToggleThreadDone: (threadId: string) => void;
+  onToggleThreadTag: (threadId: string, tagName: string) => void;
 }
 
 export interface ProjectContextMenuProps {
