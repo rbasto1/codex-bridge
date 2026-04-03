@@ -6,13 +6,16 @@ type ScrollViewportProps = PropsWithChildren<{
 
 const MIN_THUMB_HEIGHT = 32;
 const TRACK_PADDING = 8;
+const AUTO_SCROLL_THRESHOLD = 24;
 
 export function ScrollViewport(props: ScrollViewportProps) {
   const { className, children } = props;
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const thumbRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<{ startY: number; startScrollTop: number } | null>(null);
+  const autoScrollEnabledRef = useRef(true);
   const [thumbState, setThumbState] = useState({ visible: false, height: 0, top: 0 });
+  const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
@@ -37,17 +40,53 @@ export function ScrollViewport(props: ScrollViewportProps) {
       setThumbState({ visible: true, height, top });
     };
 
-    updateThumb();
-    viewport.addEventListener("scroll", updateThumb, { passive: true });
+    const isAtBottom = () => viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop <= AUTO_SCROLL_THRESHOLD;
 
-    const resizeObserver = new ResizeObserver(updateThumb);
+    const syncAutoScrollEnabled = (nextValue: boolean) => {
+      autoScrollEnabledRef.current = nextValue;
+      setAutoScrollEnabled((currentValue) => (currentValue === nextValue ? currentValue : nextValue));
+    };
+
+    const scrollToBottom = () => {
+      viewport.scrollTop = viewport.scrollHeight;
+    };
+
+    const syncViewport = () => {
+      if (autoScrollEnabledRef.current) {
+        scrollToBottom();
+      }
+      updateThumb();
+      syncAutoScrollEnabled(isAtBottom());
+    };
+
+    const handleScroll = () => {
+      updateThumb();
+      syncAutoScrollEnabled(isAtBottom());
+    };
+
+    syncViewport();
+    const frameId = requestAnimationFrame(syncViewport);
+    viewport.addEventListener("scroll", handleScroll, { passive: true });
+
+    const resizeObserver = new ResizeObserver(syncViewport);
     resizeObserver.observe(viewport);
     if (viewport.firstElementChild instanceof HTMLElement) {
       resizeObserver.observe(viewport.firstElementChild);
     }
 
+    const mutationObserver = new MutationObserver(syncViewport);
+    if (viewport.firstElementChild instanceof HTMLElement) {
+      mutationObserver.observe(viewport.firstElementChild, {
+        childList: true,
+        characterData: true,
+        subtree: true,
+      });
+    }
+
     return () => {
-      viewport.removeEventListener("scroll", updateThumb);
+      cancelAnimationFrame(frameId);
+      viewport.removeEventListener("scroll", handleScroll);
+      mutationObserver.disconnect();
       resizeObserver.disconnect();
     };
   }, []);
@@ -111,6 +150,26 @@ export function ScrollViewport(props: ScrollViewportProps) {
       <div ref={viewportRef} className={className}>
         {children}
       </div>
+
+      {!autoScrollEnabled ? (
+        <button
+          type="button"
+          className="scroll-viewport-jump"
+          aria-label="Scroll to latest message"
+          onClick={() => {
+            const viewport = viewportRef.current;
+            if (!viewport) {
+              return;
+            }
+
+            autoScrollEnabledRef.current = true;
+            setAutoScrollEnabled(true);
+            viewport.scrollTop = viewport.scrollHeight;
+          }}
+        >
+          <span className="scroll-viewport-jump-icon" aria-hidden="true" />
+        </button>
+      ) : null}
 
       {thumbState.visible ? (
         <div
