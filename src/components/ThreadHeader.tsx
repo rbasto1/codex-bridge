@@ -23,6 +23,7 @@ export function ThreadHeader(props: ThreadHeaderProps) {
     thread,
     threadLoadingId,
     onCreateTag,
+    onDeleteDraft,
     onOpenLive,
     onOpenReplay,
     onRename,
@@ -181,8 +182,9 @@ export function ThreadHeader(props: ThreadHeaderProps) {
           </div>
         </div>
 
-        {!currentThreadIsUiDraft ? (
-          <div className="thread-header-actions">
+        <div className="thread-header-actions">
+          {!currentThreadIsUiDraft ? (
+            <>
             <button type="button" className="button secondary" onClick={onOpenReplay}>
               Refresh replay
             </button>
@@ -194,6 +196,8 @@ export function ThreadHeader(props: ThreadHeaderProps) {
             >
               {isLive ? "Live" : threadLoadingId === thread.id ? "Attaching..." : "Resume live"}
             </button>
+            </>
+          ) : null}
             <div ref={menuRef} className="thread-menu-wrap">
               <button
                 type="button"
@@ -210,91 +214,98 @@ export function ThreadHeader(props: ThreadHeaderProps) {
 
               {menuOpen ? (
                 <div className="thread-menu-panel">
-                  <button type="button" className="thread-menu-item" onClick={onToggleArchived}>
-                    {archived ? "Unarchive session" : "Archive session"}
-                  </button>
-
-                  <div className="thread-menu-section">
-                    <div className="thread-menu-label">Tags</div>
-                    {visibleTags.length > 0 ? (
-                      <div className="thread-menu-tag-list">
-                        {visibleTags.map((tag) => (
-                          <span key={tag.name} className="thread-menu-tag-chip">
-                            <span className="session-tag-dot" style={{ backgroundColor: tag.color }} />
-                            <span>{tag.name}</span>
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    {visibleAvailableTags.map((tag) => {
-                      const activeTag = tags.some((entry) => entry.name === tag.name);
-                      return (
-                        <button
-                          key={tag.name}
-                          type="button"
-                          className={`session-tag-option ${activeTag ? "active" : ""}`}
-                          onClick={() => onToggleTag(tag.name)}
-                        >
-                          <span className="session-tag-option-label">
-                            <span className="session-tag-dot" style={{ backgroundColor: tag.color }} />
-                            <span>{tag.name}</span>
-                          </span>
-                          <span>{activeTag ? "On" : "Off"}</span>
-                        </button>
-                      );
-                    })}
-
-                    <button
-                      type="button"
-                      className="session-tag-add"
-                      onClick={() => {
-                        setCreatingTag((value) => !value);
-                        setCreateError(null);
-                      }}
-                    >
-                      Add tag
+                  {currentThreadIsUiDraft ? (
+                    <button type="button" className="thread-menu-item" onClick={onDeleteDraft}>
+                      Delete draft
                     </button>
+                  ) : (
+                    <>
+                      <button type="button" className="thread-menu-item" onClick={onToggleArchived}>
+                        {archived ? "Unarchive session" : "Archive session"}
+                      </button>
 
-                    {creatingTag ? (
-                      <div className="session-tag-create">
-                        <input
-                          className="session-tag-input"
-                          value={tagNameDraft}
-                          onChange={(event) => setTagNameDraft(event.target.value)}
-                          placeholder="Tag name"
-                        />
-                        <div className="session-tag-colors">
-                          {DEFAULT_TAG_COLORS.map((color) => (
+                      <div className="thread-menu-section">
+                        <div className="thread-menu-label">Tags</div>
+                        {visibleTags.length > 0 ? (
+                          <div className="thread-menu-tag-list">
+                            {visibleTags.map((tag) => (
+                              <span key={tag.name} className="thread-menu-tag-chip">
+                                <span className="session-tag-dot" style={{ backgroundColor: tag.color }} />
+                                <span>{tag.name}</span>
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        {visibleAvailableTags.map((tag) => {
+                          const activeTag = tags.some((entry) => entry.name === tag.name);
+                          return (
                             <button
-                              key={color}
+                              key={tag.name}
                               type="button"
-                              className={`session-tag-color-swatch ${tagColorDraft.toLowerCase() === color.toLowerCase() ? "active" : ""}`}
-                              style={{ backgroundColor: color }}
-                              onClick={() => setTagColorDraft(color)}
-                              title={color}
-                              aria-label={`Select ${color}`}
-                            />
-                          ))}
-                        </div>
-                        <input
-                          className="session-tag-input"
-                          value={tagColorDraft}
-                          onChange={(event) => setTagColorDraft(event.target.value)}
-                          placeholder="#22c55e"
-                        />
-                        {createError ? <div className="session-tag-error">{createError}</div> : null}
-                        <button type="button" className="session-tag-create-submit" onClick={handleCreateTag}>
-                          Create tag
+                              className={`session-tag-option ${activeTag ? "active" : ""}`}
+                              onClick={() => onToggleTag(tag.name)}
+                            >
+                              <span className="session-tag-option-label">
+                                <span className="session-tag-dot" style={{ backgroundColor: tag.color }} />
+                                <span>{tag.name}</span>
+                              </span>
+                              <span>{activeTag ? "On" : "Off"}</span>
+                            </button>
+                          );
+                        })}
+
+                        <button
+                          type="button"
+                          className="session-tag-add"
+                          onClick={() => {
+                            setCreatingTag((value) => !value);
+                            setCreateError(null);
+                          }}
+                        >
+                          Add tag
                         </button>
+
+                        {creatingTag ? (
+                          <div className="session-tag-create">
+                            <input
+                              className="session-tag-input"
+                              value={tagNameDraft}
+                              onChange={(event) => setTagNameDraft(event.target.value)}
+                              placeholder="Tag name"
+                            />
+                            <div className="session-tag-colors">
+                              {DEFAULT_TAG_COLORS.map((color) => (
+                                <button
+                                  key={color}
+                                  type="button"
+                                  className={`session-tag-color-swatch ${tagColorDraft.toLowerCase() === color.toLowerCase() ? "active" : ""}`}
+                                  style={{ backgroundColor: color }}
+                                  onClick={() => setTagColorDraft(color)}
+                                  title={color}
+                                  aria-label={`Select ${color}`}
+                                />
+                              ))}
+                            </div>
+                            <input
+                              className="session-tag-input"
+                              value={tagColorDraft}
+                              onChange={(event) => setTagColorDraft(event.target.value)}
+                              placeholder="#22c55e"
+                            />
+                            {createError ? <div className="session-tag-error">{createError}</div> : null}
+                            <button type="button" className="session-tag-create-submit" onClick={handleCreateTag}>
+                              Create tag
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
-                  </div>
+                    </>
+                  )}
                 </div>
               ) : null}
             </div>
           </div>
-        ) : null}
       </div>
     </section>
   );

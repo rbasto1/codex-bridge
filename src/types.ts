@@ -255,6 +255,7 @@ export interface ThreadHeaderProps {
   onOpenReplay: () => void;
   onOpenLive: () => void;
   onRename: (name: string) => Promise<void>;
+  onDeleteDraft: () => void;
   onToggleArchived: () => void;
   onToggleTag: (tagName: string) => void;
   onCreateTag: (name: string, color: string) => string | null;

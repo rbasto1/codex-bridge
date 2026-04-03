@@ -237,6 +237,36 @@ export function useComposerState(options: UseComposerStateOptions) {
     });
   }
 
+  function removeScopedState(threadId: string) {
+    setComposerDrafts((previous) => {
+      if (!(threadId in previous)) {
+        return previous;
+      }
+
+      const next = { ...previous };
+      delete next[threadId];
+      return next;
+    });
+    setThreadControlDrafts((previous) => {
+      if (!(threadId in previous)) {
+        return previous;
+      }
+
+      const next = { ...previous };
+      delete next[threadId];
+      return next;
+    });
+    setThreadPermissionBaselines((previous) => {
+      if (!(threadId in previous)) {
+        return previous;
+      }
+
+      const next = { ...previous };
+      delete next[threadId];
+      return next;
+    });
+  }
+
   function focusComposer() {
     setFocusToken((value) => value + 1);
   }
@@ -266,6 +296,7 @@ export function useComposerState(options: UseComposerStateOptions) {
     copyScopedState,
     focusComposer,
     moveScopedState,
+    removeScopedState,
     selectComposerEffort,
     selectComposerMode,
     selectComposerModel,

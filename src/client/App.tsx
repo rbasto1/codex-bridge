@@ -482,6 +482,17 @@ export default function App() {
     }
   }
 
+  function handleDeleteDraft() {
+    if (!currentThread || !isUiOnlyThread(currentThread)) {
+      return;
+    }
+
+    composer.removeScopedState(currentThread.id);
+    startTransition(() => {
+      removeThread(currentThread.id);
+    });
+  }
+
   async function handleRespondToRequest(request: BrowserServerRequest, body: RequestResponseBody) {
     setRespondingRequestKey(request.key);
     setActionError(null);
@@ -574,6 +585,7 @@ export default function App() {
               onOpenReplay={() => void openThread(currentThread.id, "replay")}
               onOpenLive={() => void openThread(currentThread.id, "live")}
               onRename={handleRenameThread}
+              onDeleteDraft={handleDeleteDraft}
               onToggleArchived={() => projectManager.toggleThreadArchived(currentThread.id)}
               onToggleTag={(tagName) => projectManager.toggleThreadTag(currentThread.id, tagName)}
               onCreateTag={projectManager.createTag}
