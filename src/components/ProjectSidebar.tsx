@@ -146,6 +146,22 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
       || "")
     : "";
 
+  function getProjectIndicatorState(project: string) {
+    const hasRunningThread = threadOrder.some((threadId) => {
+      const thread = threadsById[threadId];
+      return thread?.cwd === project && thread.status.type === "active";
+    });
+    if (hasRunningThread) {
+      return "running";
+    }
+
+    const hasUnreadThread = threadOrder.some((threadId) => {
+      const thread = threadsById[threadId];
+      return thread?.cwd === project && Boolean(unreadThreadIds[threadId]);
+    });
+    return hasUnreadThread ? "unread" : null;
+  }
+
   return (
     <>
       <button
@@ -172,10 +188,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
               const stateEntry = projectState.find((entry) => entry.id === project);
               const tileLabel = formatProjectTileLabel(stateEntry?.name || project);
               const isDragOver = dragOverProject === project && draggedProject !== project;
-              const projectHasUnread = threadOrder.some((threadId) => {
-                const thread = threadsById[threadId];
-                return thread?.cwd === project && Boolean(unreadThreadIds[threadId]) && thread.status.type !== "active";
-              });
+              const projectIndicatorState = getProjectIndicatorState(project);
 
               return (
                 <div
@@ -224,8 +237,8 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
                         className="project-tile-icon"
                       />
                     ) : tileLabel}
-                    {projectHasUnread ? <span className="project-unread-dot" /> : null}
                   </button>
+                  {projectIndicatorState ? <span className={`project-status-dot ${projectIndicatorState}`} /> : null}
                 </div>
               );
             })}
@@ -245,6 +258,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
                   const hasIcon = projectId in projectIconVersions;
                   const stateEntry = projectState.find((entry) => entry.id === project);
                   const tileLabel = formatProjectTileLabel(stateEntry?.name || project);
+                  const projectIndicatorState = getProjectIndicatorState(project);
 
                   return (
                     <div key={project} className="project-tile-wrapper">
@@ -267,6 +281,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
                           />
                         ) : tileLabel}
                       </button>
+                      {projectIndicatorState ? <span className={`project-status-dot ${projectIndicatorState}`} /> : null}
                     </div>
                   );
                 }) : null}

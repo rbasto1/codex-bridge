@@ -207,15 +207,24 @@ button {
   text-transform: uppercase;
 }
 
-.project-unread-dot {
+.project-status-dot {
   position: absolute;
-  top: -2px;
-  right: -2px;
+  top: 2px;
+  right: 2px;
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: var(--color-interactive);
   border: 1px solid var(--bg-strong);
+  z-index: 1;
+}
+
+.project-status-dot.unread {
+  background: var(--color-interactive);
+}
+
+.project-status-dot.running {
+  background: var(--color-success);
+  animation: session-pulse 1.2s ease-in-out infinite;
 }
 
 .project-rail-brand {
@@ -2086,6 +2095,10 @@ details[open] > .collapsible-summary::before {
 }
 
 /* ── Drag-and-drop ───────────────────────────── */
+.project-tile-wrapper {
+  position: relative;
+}
+
 .project-tile-wrapper.dragging {
   opacity: 0.4;
 }

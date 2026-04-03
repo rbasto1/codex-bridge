@@ -76,6 +76,7 @@ export const useAppStore = create<AppStore>((set) => ({
       const activeTurnIdByThreadId = { ...state.activeTurnIdByThreadId };
       const threadModes = { ...state.threadModes, [thread.id]: mode };
       const liveAttachedThreadIds = { ...state.liveAttachedThreadIds };
+      const unreadThreadIds = { ...state.unreadThreadIds };
 
       turnOrderByThreadId[thread.id] = [];
       for (const turn of thread.turns) {
@@ -105,6 +106,8 @@ export const useAppStore = create<AppStore>((set) => ({
         threadSessionConfigById[thread.id] = sessionConfig;
       }
 
+      delete unreadThreadIds[thread.id];
+
       return {
         threadsById,
         threadSessionConfigById,
@@ -117,6 +120,7 @@ export const useAppStore = create<AppStore>((set) => ({
         threadModes,
         liveAttachedThreadIds,
         activeTurnIdByThreadId,
+        unreadThreadIds,
         selectedThreadError: null,
       };
     });
