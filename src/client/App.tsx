@@ -13,6 +13,7 @@ import {
   startTurn,
   steerTurn,
 } from "./api";
+import { playSessionCompleteSound } from "./sessionCompleteSound";
 import { useAppStore } from "./store";
 import {
   createTextInput,
@@ -168,6 +169,30 @@ export default function App() {
   useEffect(() => {
     openThreadRef.current = openThread;
   }, [openThread]);
+
+  useEffect(() => {
+    return useAppStore.subscribe((state, previousState) => {
+      const threadIds = new Set([
+        ...Object.keys(previousState.activeTurnIdByThreadId),
+        ...Object.keys(state.activeTurnIdByThreadId),
+      ]);
+
+      for (const threadId of threadIds) {
+        const previousActiveTurnId = previousState.activeTurnIdByThreadId[threadId] ?? null;
+        const currentActiveTurnId = state.activeTurnIdByThreadId[threadId] ?? null;
+        if (previousActiveTurnId === null) {
+          continue;
+        }
+        if (currentActiveTurnId === null && state.liveAttachedThreadIds[threadId] === true) {
+          const completedTurn = state.turnsById[previousActiveTurnId];
+          if (completedTurn?.status === "completed") {
+            playSessionCompleteSound();
+            break;
+          }
+        }
+      }
+    });
+  }, []);
 
   const projectManager = useProjectManager({
     initialUi,
