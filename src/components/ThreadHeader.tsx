@@ -100,7 +100,7 @@ export function ThreadHeader(props: ThreadHeaderProps) {
 
           <div className="thread-meta-row">
             <span className={`badge ${currentThreadIsUiDraft || isLive ? "badge-live" : "badge-replay"}`}>
-              {currentThreadIsUiDraft ? "Draft session" : isLive ? "Live attached" : "Replay only"}
+              {currentThreadIsUiDraft ? "Draft" : isLive ? "Live" : "Replay only"}
             </span>
           </div>
         </div>
@@ -116,7 +116,7 @@ export function ThreadHeader(props: ThreadHeaderProps) {
               onClick={onOpenLive}
               disabled={threadLoadingId === thread.id}
             >
-              {isLive ? "Live attached" : threadLoadingId === thread.id ? "Attaching..." : "Resume live"}
+              {isLive ? "Live" : threadLoadingId === thread.id ? "Attaching..." : "Resume live"}
             </button>
           </div>
         ) : null}

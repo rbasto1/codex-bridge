@@ -168,8 +168,8 @@ button {
 /* ── Sidebar ───────────────────────────────────── */
 .sidebar {
   display: flex;
-  width: 340px;
-  min-width: 340px;
+  width: 520px;
+  min-width: 460px;
   flex-shrink: 0;
   height: 100dvh;
   background: var(--bg-strong);
@@ -868,11 +868,12 @@ button {
   border-right: 2px solid currentColor;
   border-bottom: 2px solid currentColor;
   transform: translateY(-2px) rotate(45deg);
+}
 
 .workspace-column {
   display: flex;
   flex-direction: column;
-  width: min(100%, 760px);
+  width: min(100%, 800px);
   margin: 0 auto;
 }
 
@@ -1922,6 +1923,21 @@ details[open] > .collapsible-summary::before {
   margin-top: 16px;
 }
 
+.auth-modal-backdrop {
+  z-index: 400;
+}
+
+.modal-text {
+  margin: 0 0 12px;
+  color: var(--text-base);
+}
+
+.modal-error {
+  margin: 12px 0 0;
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+}
+
 /* ── Icon upload ──────────────────────────────── */
 .icon-upload-area {
   margin-top: 6px;
@@ -1982,18 +1998,3 @@ details[open] > .collapsible-summary::before {
   border-top: 2px solid var(--border-selected, #034cff);
   margin-top: -2px;
 }
-.auth-modal-backdrop {
-  z-index: 400;
-}
-
-.modal-text {
-  margin: 0 0 12px;
-  color: var(--text-base);
-}
-
-.modal-error {
-  margin: 12px 0 0;
-  color: var(--color-error);
-  font-size: var(--font-size-sm);
-}
-
