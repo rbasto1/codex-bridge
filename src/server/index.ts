@@ -417,7 +417,7 @@ if (existsSync(clientDist)) {
 }
 
 server.listen(PORT, () => {
-  console.log(`Codex Web Local listening on http://127.0.0.1:${PORT}`);
+  console.log(`Codex Bridge listening on http://127.0.0.1:${PORT}`);
 });
 
 void bridge.start().catch((error) => {

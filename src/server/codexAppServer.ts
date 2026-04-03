@@ -196,8 +196,8 @@ export class CodexAppServerBridge {
         "initialize",
         {
           clientInfo: {
-            name: "codex_web_local",
-            title: "Codex Web Local",
+            name: "codex_bridge",
+            title: "Codex Bridge",
             version: "0.1.0",
           },
           capabilities: {
@@ -241,7 +241,7 @@ export class CodexAppServerBridge {
 
     if (method === "thread/start") {
       return {
-        serviceName: "codex_web_local",
+        serviceName: "codex_bridge",
         experimentalRawEvents: false,
         persistExtendedHistory: true,
         ...next,

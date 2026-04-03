@@ -1,7 +1,7 @@
 import type { ComposerControlDraft, PersistedUi } from "../types";
 import { isRecord } from "../shared/codex.js";
 
-const STORAGE_KEY = "codex-web-local-ui";
+const STORAGE_KEY = "codex-bridge-ui";
 const DRAFT_PREFIX = "draft:";
 const CONTROL_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 

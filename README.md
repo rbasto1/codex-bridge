@@ -1,6 +1,6 @@
-# Codex Web
+# Codex Bridge
 
-Codex Web makes Codex accessible in the browser.
+Codex Bridge makes Codex accessible in the browser.
 
 It runs a small local web server, launches `codex app-server` in the background, and gives you a chat UI for starting, resuming, and managing Codex sessions from anywhere you can reach the page, including mobile.
 
