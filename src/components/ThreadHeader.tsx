@@ -1,17 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { ThreadHeaderProps } from "../types";
-
-const DEFAULT_TAG_COLORS = [
-  "#22c55e",
-  "#3b82f6",
-  "#8b5cf6",
-  "#ec4899",
-  "#f97316",
-  "#eab308",
-  "#14b8a6",
-  "#64748b",
-];
+import { CreateTagModal } from "./CreateTagModal";
 
 export function ThreadHeader(props: ThreadHeaderProps) {
   const {
@@ -31,14 +21,10 @@ export function ThreadHeader(props: ThreadHeaderProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [creatingTag, setCreatingTag] = useState(false);
-  const [tagNameDraft, setTagNameDraft] = useState("");
-  const [tagColorDraft, setTagColorDraft] = useState(DEFAULT_TAG_COLORS[0]);
-  const [createError, setCreateError] = useState<string | null>(null);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const threadId = thread.id;
 
-  const visibleTags = tags.filter((tag) => tag.name !== "done");
   const visibleAvailableTags = availableTags.filter((tag) => tag.name !== "done" && tag.name !== "archived");
 
   useEffect(() => {
@@ -51,7 +37,6 @@ export function ThreadHeader(props: ThreadHeaderProps) {
     void threadId;
     setMenuOpen(false);
     setCreatingTag(false);
-    setCreateError(null);
   }, [threadId]);
 
   useEffect(() => {
@@ -78,7 +63,6 @@ export function ThreadHeader(props: ThreadHeaderProps) {
       if (!menuRef.current?.contains(event.target as Node)) {
         setMenuOpen(false);
         setCreatingTag(false);
-        setCreateError(null);
       }
     }
 
@@ -118,21 +102,7 @@ export function ThreadHeader(props: ThreadHeaderProps) {
     setIsEditingTitle(false);
   }
 
-  function handleCreateTag() {
-    const error = onCreateTag(tagNameDraft, tagColorDraft);
-    if (error) {
-      setCreateError(error);
-      return;
-    }
-
-    onToggleTag(tagNameDraft.trim());
-    setTagNameDraft("");
-    setTagColorDraft(DEFAULT_TAG_COLORS[0]);
-    setCreateError(null);
-    setCreatingTag(false);
-  }
-
-  return (
+  return (<>
     <section className="thread-header">
       <div className="workspace-column thread-header-column">
         <div className="thread-title-row">
@@ -173,10 +143,7 @@ export function ThreadHeader(props: ThreadHeaderProps) {
             <button
               type="button"
               className={`thread-menu-toggle ${menuOpen ? "open" : ""}`}
-              onClick={() => {
-                setMenuOpen((value) => !value);
-                setCreateError(null);
-              }}
+              onClick={() => setMenuOpen((value) => !value)}
               aria-label="Session options"
               title="Session options"
             >
@@ -192,22 +159,14 @@ export function ThreadHeader(props: ThreadHeaderProps) {
                 ) : (
                   <>
                     <button type="button" className="thread-menu-item" onClick={onToggleArchived}>
+                      <ArchiveGlyph />
                       {archived ? "Unarchive session" : "Archive session"}
                     </button>
 
+                    <div className="thread-menu-divider" />
+
                     <div className="thread-menu-section">
                       <div className="thread-menu-label">Tags</div>
-                      {visibleTags.length > 0 ? (
-                        <div className="thread-menu-tag-list">
-                          {visibleTags.map((tag) => (
-                            <span key={tag.name} className="thread-menu-tag-chip">
-                              <span className="session-tag-dot" style={{ backgroundColor: tag.color }} />
-                              <span>{tag.name}</span>
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
-
                       {visibleAvailableTags.map((tag) => {
                         const activeTag = tags.some((entry) => entry.name === tag.name);
                         return (
@@ -217,59 +176,25 @@ export function ThreadHeader(props: ThreadHeaderProps) {
                             className={`session-tag-option ${activeTag ? "active" : ""}`}
                             onClick={() => onToggleTag(tag.name)}
                           >
-                            <span className="session-tag-option-label">
-                              <span className="session-tag-dot" style={{ backgroundColor: tag.color }} />
-                              <span>{tag.name}</span>
+                            <span className="session-tag-option-check">
+                              {activeTag ? <CheckGlyph /> : null}
                             </span>
-                            <span>{activeTag ? "On" : "Off"}</span>
+                            <span className="session-tag-dot" style={{ backgroundColor: tag.color }} />
+                            <span>{tag.name}</span>
                           </button>
                         );
                       })}
 
                       <button
                         type="button"
-                        className="session-tag-add"
-                        onClick={() => {
-                          setCreatingTag((value) => !value);
-                          setCreateError(null);
-                        }}
+                        className="session-tag-option"
+                        onClick={() => setCreatingTag(true)}
                       >
-                        Add tag
+                        <span className="session-tag-option-check">
+                          <TagPlusGlyph />
+                        </span>
+                        <span>Create new tag</span>
                       </button>
-
-                      {creatingTag ? (
-                        <div className="session-tag-create">
-                          <input
-                            className="session-tag-input"
-                            value={tagNameDraft}
-                            onChange={(event) => setTagNameDraft(event.target.value)}
-                            placeholder="Tag name"
-                          />
-                          <div className="session-tag-colors">
-                            {DEFAULT_TAG_COLORS.map((color) => (
-                              <button
-                                key={color}
-                                type="button"
-                                className={`session-tag-color-swatch ${tagColorDraft.toLowerCase() === color.toLowerCase() ? "active" : ""}`}
-                                style={{ backgroundColor: color }}
-                                onClick={() => setTagColorDraft(color)}
-                                title={color}
-                                aria-label={`Select ${color}`}
-                              />
-                            ))}
-                          </div>
-                          <input
-                            className="session-tag-input"
-                            value={tagColorDraft}
-                            onChange={(event) => setTagColorDraft(event.target.value)}
-                            placeholder="#22c55e"
-                          />
-                          {createError ? <div className="session-tag-error">{createError}</div> : null}
-                          <button type="button" className="session-tag-create-submit" onClick={handleCreateTag}>
-                            Create tag
-                          </button>
-                        </div>
-                      ) : null}
                     </div>
                   </>
                 )}
@@ -279,6 +204,40 @@ export function ThreadHeader(props: ThreadHeaderProps) {
         </div>
       </div>
     </section>
+
+    {creatingTag ? (
+      <CreateTagModal
+        onCreateTag={onCreateTag}
+        onToggleTag={onToggleTag}
+        onClose={() => setCreatingTag(false)}
+      />
+    ) : null}
+  </>
+  );
+}
+
+function ArchiveGlyph() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="currentColor">
+      <path d="M1.75 3a.75.75 0 0 0-.75.75v1.5c0 .414.336.75.75.75h12.5a.75.75 0 0 0 .75-.75v-1.5a.75.75 0 0 0-.75-.75H1.75ZM2.5 7.5v4.75c0 .414.336.75.75.75h9.5a.75.75 0 0 0 .75-.75V7.5h-11Zm4 1.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1 0-1Z" />
+    </svg>
+  );
+}
+
+function TagPlusGlyph() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="currentColor">
+      <path d="M1 3a2 2 0 0 1 2-2h4.586a1 1 0 0 1 .707.293l6.414 6.414a2 2 0 0 1 0 2.828l-4.586 4.586a2 2 0 0 1-2.828 0L.879 8.707A1 1 0 0 1 .586 8V3.414L1 3Zm3.5 2a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" />
+      <path d="M13 1.5a.5.5 0 0 1 .5.5v1.5H15a.5.5 0 0 1 0 1h-1.5V6a.5.5 0 0 1-1 0V4.5H11a.5.5 0 0 1 0-1h1.5V2a.5.5 0 0 1 .5-.5Z" />
+    </svg>
+  );
+}
+
+function CheckGlyph() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="currentColor">
+      <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z" />
+    </svg>
   );
 }
 
