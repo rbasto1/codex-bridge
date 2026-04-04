@@ -13,6 +13,7 @@ import {
   type ThreadSessionConfig,
   type Turn,
 } from "../shared/codex.js";
+import { asString, normalizeStringArray } from "../lib/threads";
 import type { AppStore, ThreadMode } from "../types";
 
 export const useAppStore = create<AppStore>((set) => ({
@@ -246,26 +247,7 @@ export const useAppStore = create<AppStore>((set) => ({
 
   noteTurn: (threadId, turn) => {
     set((state) => {
-      const turnsById = { ...state.turnsById, [turn.id]: turn };
-      const turnOrderByThreadId = { ...state.turnOrderByThreadId };
-      const activeTurnIdByThreadId = { ...state.activeTurnIdByThreadId };
-      const nonSteerableThreadIds = { ...state.nonSteerableThreadIds };
-
-      ensureOrderedId(turnOrderByThreadId, threadId, turn.id);
-
-      if (turn.status === "inProgress") {
-        activeTurnIdByThreadId[threadId] = turn.id;
-      } else if (activeTurnIdByThreadId[threadId] === turn.id) {
-        delete activeTurnIdByThreadId[threadId];
-        delete nonSteerableThreadIds[threadId];
-      }
-
-      return {
-        turnsById,
-        turnOrderByThreadId,
-        activeTurnIdByThreadId,
-        nonSteerableThreadIds,
-      };
+      return createTurnStateUpdate(state, threadId, turn);
     });
   },
 
@@ -355,25 +337,10 @@ export const useAppStore = create<AppStore>((set) => ({
           }
 
           const turn = payload.turn as Turn;
-          const turnsById = { ...state.turnsById, [turn.id]: turn };
-          const turnOrderByThreadId = { ...state.turnOrderByThreadId };
-          const activeTurnIdByThreadId = { ...state.activeTurnIdByThreadId };
-          const nonSteerableThreadIds = { ...state.nonSteerableThreadIds };
-
-          ensureOrderedId(turnOrderByThreadId, threadId, turn.id);
-
-          if (turn.status === "inProgress") {
-            activeTurnIdByThreadId[threadId] = turn.id;
-          } else if (activeTurnIdByThreadId[threadId] === turn.id) {
-            delete activeTurnIdByThreadId[threadId];
-            delete nonSteerableThreadIds[threadId];
-          }
+          const nextTurnState = createTurnStateUpdate(state, threadId, turn);
 
           return {
-            turnsById,
-            turnOrderByThreadId,
-            activeTurnIdByThreadId,
-            nonSteerableThreadIds,
+            ...nextTurnState,
             unreadThreadIds,
           };
         }
@@ -384,20 +351,12 @@ export const useAppStore = create<AppStore>((set) => ({
             return state;
           }
 
-          const itemsById = { ...state.itemsById, [payload.item.id as string]: payload.item as ThreadItem };
-          const turnsById = { ...state.turnsById };
-          const turnOrderByThreadId = { ...state.turnOrderByThreadId };
-          const itemOrderByTurnId = { ...state.itemOrderByTurnId };
-
-          ensureTurn(turnsById, payload.turnId);
-          ensureOrderedId(turnOrderByThreadId, threadId, payload.turnId);
-          ensureOrderedId(itemOrderByTurnId, payload.turnId, payload.item.id as string);
+          const itemId = payload.item.id as string;
+          const nextItemState = prepareItemCollections(state, threadId, payload.turnId, itemId);
+          nextItemState.itemsById[itemId] = payload.item as ThreadItem;
 
           return {
-            itemsById,
-            turnsById,
-            turnOrderByThreadId,
-            itemOrderByTurnId,
+            ...nextItemState,
             unreadThreadIds,
           };
         }
@@ -407,26 +366,18 @@ export const useAppStore = create<AppStore>((set) => ({
             return state;
           }
 
-          const turnsById = { ...state.turnsById };
-          const turnOrderByThreadId = { ...state.turnOrderByThreadId };
-          const itemsById = { ...state.itemsById };
-          const itemOrderByTurnId = { ...state.itemOrderByTurnId };
-
-          ensureTurn(turnsById, payload.turnId);
-          ensureOrderedId(turnOrderByThreadId, threadId, payload.turnId);
-          ensureOrderedId(itemOrderByTurnId, payload.turnId, payload.itemId);
-          const current = ensurePlaceholderItem(itemsById, payload.itemId, "agentMessage");
-
-          itemsById[payload.itemId] = {
-            ...current,
-            text: `${asString(current.text)}${asString(payload.delta)}`,
-          };
+          const nextItemState = appendPlaceholderItemDelta(
+            state,
+            threadId,
+            payload.turnId,
+            payload.itemId,
+            "agentMessage",
+            "text",
+            payload.delta,
+          );
 
           return {
-            turnsById,
-            turnOrderByThreadId,
-            itemsById,
-            itemOrderByTurnId,
+            ...nextItemState,
             unreadThreadIds,
           };
         }
@@ -436,26 +387,18 @@ export const useAppStore = create<AppStore>((set) => ({
             return state;
           }
 
-          const turnsById = { ...state.turnsById };
-          const turnOrderByThreadId = { ...state.turnOrderByThreadId };
-          const itemsById = { ...state.itemsById };
-          const itemOrderByTurnId = { ...state.itemOrderByTurnId };
-
-          ensureTurn(turnsById, payload.turnId);
-          ensureOrderedId(turnOrderByThreadId, threadId, payload.turnId);
-          ensureOrderedId(itemOrderByTurnId, payload.turnId, payload.itemId);
-          const current = ensurePlaceholderItem(itemsById, payload.itemId, "plan");
-
-          itemsById[payload.itemId] = {
-            ...current,
-            text: `${asString(current.text)}${asString(payload.delta)}`,
-          };
+          const nextItemState = appendPlaceholderItemDelta(
+            state,
+            threadId,
+            payload.turnId,
+            payload.itemId,
+            "plan",
+            "text",
+            payload.delta,
+          );
 
           return {
-            turnsById,
-            turnOrderByThreadId,
-            itemsById,
-            itemOrderByTurnId,
+            ...nextItemState,
             unreadThreadIds,
           };
         }
@@ -465,26 +408,18 @@ export const useAppStore = create<AppStore>((set) => ({
             return state;
           }
 
-          const turnsById = { ...state.turnsById };
-          const turnOrderByThreadId = { ...state.turnOrderByThreadId };
-          const itemsById = { ...state.itemsById };
-          const itemOrderByTurnId = { ...state.itemOrderByTurnId };
-
-          ensureTurn(turnsById, payload.turnId);
-          ensureOrderedId(turnOrderByThreadId, threadId, payload.turnId);
-          ensureOrderedId(itemOrderByTurnId, payload.turnId, payload.itemId);
-          const current = ensurePlaceholderItem(itemsById, payload.itemId, "commandExecution");
-
-          itemsById[payload.itemId] = {
-            ...current,
-            aggregatedOutput: `${asString(current.aggregatedOutput)}${asString(payload.delta)}`,
-          };
+          const nextItemState = appendPlaceholderItemDelta(
+            state,
+            threadId,
+            payload.turnId,
+            payload.itemId,
+            "commandExecution",
+            "aggregatedOutput",
+            payload.delta,
+          );
 
           return {
-            turnsById,
-            turnOrderByThreadId,
-            itemsById,
-            itemOrderByTurnId,
+            ...nextItemState,
             unreadThreadIds,
           };
         }
@@ -494,26 +429,18 @@ export const useAppStore = create<AppStore>((set) => ({
             return state;
           }
 
-          const turnsById = { ...state.turnsById };
-          const turnOrderByThreadId = { ...state.turnOrderByThreadId };
-          const itemsById = { ...state.itemsById };
-          const itemOrderByTurnId = { ...state.itemOrderByTurnId };
-
-          ensureTurn(turnsById, payload.turnId);
-          ensureOrderedId(turnOrderByThreadId, threadId, payload.turnId);
-          ensureOrderedId(itemOrderByTurnId, payload.turnId, payload.itemId);
-          const current = ensurePlaceholderItem(itemsById, payload.itemId, "fileChange");
-
-          itemsById[payload.itemId] = {
-            ...current,
-            summaryText: `${asString(current.summaryText)}${asString(payload.delta)}`,
-          };
+          const nextItemState = appendPlaceholderItemDelta(
+            state,
+            threadId,
+            payload.turnId,
+            payload.itemId,
+            "fileChange",
+            "summaryText",
+            payload.delta,
+          );
 
           return {
-            turnsById,
-            turnOrderByThreadId,
-            itemsById,
-            itemOrderByTurnId,
+            ...nextItemState,
             unreadThreadIds,
           };
         }
@@ -523,31 +450,18 @@ export const useAppStore = create<AppStore>((set) => ({
             return state;
           }
 
-          const turnsById = { ...state.turnsById };
-          const turnOrderByThreadId = { ...state.turnOrderByThreadId };
-          const itemsById = { ...state.itemsById };
-          const itemOrderByTurnId = { ...state.itemOrderByTurnId };
           const summaryIndex = typeof payload.summaryIndex === "number" ? payload.summaryIndex : 0;
-
-          ensureTurn(turnsById, payload.turnId);
-          ensureOrderedId(turnOrderByThreadId, threadId, payload.turnId);
-          ensureOrderedId(itemOrderByTurnId, payload.turnId, payload.itemId);
-          const current = ensurePlaceholderItem(itemsById, payload.itemId, "reasoning");
-          const summary = normalizeStringArray(current.summary);
-          while (summary.length <= summaryIndex) {
-            summary.push("");
-          }
-
-          itemsById[payload.itemId] = {
-            ...current,
-            summary,
-          };
+          const nextItemState = updateReasoningItemField(
+            state,
+            threadId,
+            payload.turnId,
+            payload.itemId,
+            "summary",
+            summaryIndex,
+          );
 
           return {
-            turnsById,
-            turnOrderByThreadId,
-            itemsById,
-            itemOrderByTurnId,
+            ...nextItemState,
             unreadThreadIds,
           };
         }
@@ -557,32 +471,19 @@ export const useAppStore = create<AppStore>((set) => ({
             return state;
           }
 
-          const turnsById = { ...state.turnsById };
-          const turnOrderByThreadId = { ...state.turnOrderByThreadId };
-          const itemsById = { ...state.itemsById };
-          const itemOrderByTurnId = { ...state.itemOrderByTurnId };
           const summaryIndex = typeof payload.summaryIndex === "number" ? payload.summaryIndex : 0;
-
-          ensureTurn(turnsById, payload.turnId);
-          ensureOrderedId(turnOrderByThreadId, threadId, payload.turnId);
-          ensureOrderedId(itemOrderByTurnId, payload.turnId, payload.itemId);
-          const current = ensurePlaceholderItem(itemsById, payload.itemId, "reasoning");
-          const summary = normalizeStringArray(current.summary);
-          while (summary.length <= summaryIndex) {
-            summary.push("");
-          }
-          summary[summaryIndex] = `${summary[summaryIndex]}${asString(payload.delta)}`;
-
-          itemsById[payload.itemId] = {
-            ...current,
-            summary,
-          };
+          const nextItemState = updateReasoningItemField(
+            state,
+            threadId,
+            payload.turnId,
+            payload.itemId,
+            "summary",
+            summaryIndex,
+            payload.delta,
+          );
 
           return {
-            turnsById,
-            turnOrderByThreadId,
-            itemsById,
-            itemOrderByTurnId,
+            ...nextItemState,
             unreadThreadIds,
           };
         }
@@ -592,32 +493,19 @@ export const useAppStore = create<AppStore>((set) => ({
             return state;
           }
 
-          const turnsById = { ...state.turnsById };
-          const turnOrderByThreadId = { ...state.turnOrderByThreadId };
-          const itemsById = { ...state.itemsById };
-          const itemOrderByTurnId = { ...state.itemOrderByTurnId };
           const contentIndex = typeof payload.contentIndex === "number" ? payload.contentIndex : 0;
-
-          ensureTurn(turnsById, payload.turnId);
-          ensureOrderedId(turnOrderByThreadId, threadId, payload.turnId);
-          ensureOrderedId(itemOrderByTurnId, payload.turnId, payload.itemId);
-          const current = ensurePlaceholderItem(itemsById, payload.itemId, "reasoning");
-          const content = normalizeStringArray(current.content);
-          while (content.length <= contentIndex) {
-            content.push("");
-          }
-          content[contentIndex] = `${content[contentIndex]}${asString(payload.delta)}`;
-
-          itemsById[payload.itemId] = {
-            ...current,
-            content,
-          };
+          const nextItemState = updateReasoningItemField(
+            state,
+            threadId,
+            payload.turnId,
+            payload.itemId,
+            "content",
+            contentIndex,
+            payload.delta,
+          );
 
           return {
-            turnsById,
-            turnOrderByThreadId,
-            itemsById,
-            itemOrderByTurnId,
+            ...nextItemState,
           };
         }
 
@@ -658,6 +546,7 @@ function mergeThread(previous: Thread | undefined, next: Thread): Thread {
   return {
     ...previous,
     ...next,
+    name: next.name ?? previous.name,
     turns: next.turns.length > 0 ? next.turns : previous.turns,
   };
 }
@@ -737,14 +626,110 @@ function createPlaceholderItem(itemId: string, type: string): ThreadItem {
   }
 }
 
-function normalizeStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
+type TurnStateUpdate = Pick<
+  AppStore,
+  "turnsById" | "turnOrderByThreadId" | "activeTurnIdByThreadId" | "nonSteerableThreadIds"
+>;
+
+type ItemCollections = Pick<AppStore, "turnsById" | "turnOrderByThreadId" | "itemsById" | "itemOrderByTurnId">;
+
+type PlaceholderStringField = "text" | "aggregatedOutput" | "summaryText";
+type ReasoningField = "summary" | "content";
+
+function createTurnStateUpdate(state: TurnStateUpdate, threadId: string, turn: Turn): TurnStateUpdate {
+  const turnsById = { ...state.turnsById, [turn.id]: turn };
+  const turnOrderByThreadId = { ...state.turnOrderByThreadId };
+  const activeTurnIdByThreadId = { ...state.activeTurnIdByThreadId };
+  const nonSteerableThreadIds = { ...state.nonSteerableThreadIds };
+
+  ensureOrderedId(turnOrderByThreadId, threadId, turn.id);
+
+  if (turn.status === "inProgress") {
+    activeTurnIdByThreadId[threadId] = turn.id;
+  } else if (activeTurnIdByThreadId[threadId] === turn.id) {
+    delete activeTurnIdByThreadId[threadId];
+    delete nonSteerableThreadIds[threadId];
   }
 
-  return value.map((entry) => (typeof entry === "string" ? entry : ""));
+  return {
+    turnsById,
+    turnOrderByThreadId,
+    activeTurnIdByThreadId,
+    nonSteerableThreadIds,
+  };
 }
 
-function asString(value: unknown): string {
-  return typeof value === "string" ? value : "";
+function prepareItemCollections(
+  state: ItemCollections,
+  threadId: string,
+  turnId: string,
+  itemId: string,
+): ItemCollections {
+  const turnsById = { ...state.turnsById };
+  const turnOrderByThreadId = { ...state.turnOrderByThreadId };
+  const itemsById = { ...state.itemsById };
+  const itemOrderByTurnId = { ...state.itemOrderByTurnId };
+
+  ensureTurn(turnsById, turnId);
+  ensureOrderedId(turnOrderByThreadId, threadId, turnId);
+  ensureOrderedId(itemOrderByTurnId, turnId, itemId);
+
+  return {
+    turnsById,
+    turnOrderByThreadId,
+    itemsById,
+    itemOrderByTurnId,
+  };
+}
+
+function appendPlaceholderItemDelta(
+  state: ItemCollections,
+  threadId: string,
+  turnId: string,
+  itemId: string,
+  type: string,
+  field: PlaceholderStringField,
+  delta: unknown,
+): ItemCollections {
+  const nextState = prepareItemCollections(state, threadId, turnId, itemId);
+  const current = ensurePlaceholderItem(nextState.itemsById, itemId, type);
+
+  nextState.itemsById[itemId] = {
+    ...current,
+    [field]: `${asString((current as Record<string, unknown>)[field])}${asString(delta)}`,
+  };
+
+  return nextState;
+}
+
+function updateReasoningItemField(
+  state: ItemCollections,
+  threadId: string,
+  turnId: string,
+  itemId: string,
+  field: ReasoningField,
+  index: number,
+  delta?: unknown,
+): ItemCollections {
+  const nextState = prepareItemCollections(state, threadId, turnId, itemId);
+  const current = ensurePlaceholderItem(nextState.itemsById, itemId, "reasoning");
+  const values = normalizeStringArray((current as unknown as Record<ReasoningField, unknown>)[field]);
+
+  ensureStringIndex(values, index);
+  if (delta !== undefined) {
+    values[index] = `${values[index]}${asString(delta)}`;
+  }
+
+  nextState.itemsById[itemId] = {
+    ...current,
+    [field]: values,
+  };
+
+  return nextState;
+}
+
+function ensureStringIndex(values: string[], index: number): void {
+  while (values.length <= index) {
+    values.push("");
+  }
 }

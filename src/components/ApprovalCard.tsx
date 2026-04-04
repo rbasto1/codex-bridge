@@ -8,28 +8,40 @@ export function ApprovalCard(props: ApprovalCardProps) {
   const { request, disabled, onRespond, relatedItem } = props;
   const [toolAnswers, setToolAnswers] = useState<Record<string, string>>({});
 
+  function renderPendingHeader(title: string) {
+    return (
+      <div className="approval-header">
+        <span className="eyebrow">{title}</span>
+        <span className="badge danger">pending</span>
+      </div>
+    );
+  }
+
+  function renderDecisionActions() {
+    return (
+      <div className="approval-actions">
+        <button type="button" className="button primary" disabled={disabled} onClick={() => void onRespond(request, { result: { decision: "accept" } })}>
+          Accept
+        </button>
+        <button type="button" className="button secondary" disabled={disabled} onClick={() => void onRespond(request, { result: { decision: "decline" } })}>
+          Decline
+        </button>
+        <button type="button" className="button secondary" disabled={disabled} onClick={() => void onRespond(request, { result: { decision: "cancel" } })}>
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
   if (request.method === "item/commandExecution/requestApproval") {
     const params = request.params ?? {};
     return (
       <div className="approval-card">
-        <div className="approval-header">
-          <span className="eyebrow">Command approval</span>
-          <span className="badge danger">pending</span>
-        </div>
+        {renderPendingHeader("Command approval")}
         <p className="approval-copy">{asString(params.reason) || "Codex wants to run a command."}</p>
         <pre className="code-slab">{asString(params.command) || "(command unavailable)"}</pre>
         <p className="approval-meta">cwd: {asString(params.cwd) || "unknown"}</p>
-        <div className="approval-actions">
-          <button type="button" className="button primary" disabled={disabled} onClick={() => void onRespond(request, { result: { decision: "accept" } })}>
-            Accept
-          </button>
-          <button type="button" className="button secondary" disabled={disabled} onClick={() => void onRespond(request, { result: { decision: "decline" } })}>
-            Decline
-          </button>
-          <button type="button" className="button secondary" disabled={disabled} onClick={() => void onRespond(request, { result: { decision: "cancel" } })}>
-            Cancel
-          </button>
-        </div>
+        {renderDecisionActions()}
       </div>
     );
   }
@@ -38,23 +50,10 @@ export function ApprovalCard(props: ApprovalCardProps) {
     const paths = extractFileChangePaths(relatedItem as ThreadItem | undefined);
     return (
       <div className="approval-card">
-        <div className="approval-header">
-          <span className="eyebrow">File change approval</span>
-          <span className="badge danger">pending</span>
-        </div>
+        {renderPendingHeader("File change approval")}
         <p className="approval-copy">{asString(request.params?.reason) || "Codex wants to apply file changes."}</p>
         <p className="approval-meta">{paths.length > 0 ? paths.join("\n") : "No file summary was available."}</p>
-        <div className="approval-actions">
-          <button type="button" className="button primary" disabled={disabled} onClick={() => void onRespond(request, { result: { decision: "accept" } })}>
-            Accept
-          </button>
-          <button type="button" className="button secondary" disabled={disabled} onClick={() => void onRespond(request, { result: { decision: "decline" } })}>
-            Decline
-          </button>
-          <button type="button" className="button secondary" disabled={disabled} onClick={() => void onRespond(request, { result: { decision: "cancel" } })}>
-            Cancel
-          </button>
-        </div>
+        {renderDecisionActions()}
       </div>
     );
   }
@@ -63,10 +62,7 @@ export function ApprovalCard(props: ApprovalCardProps) {
     const requestedPermissions = request.params?.permissions;
     return (
       <div className="approval-card">
-        <div className="approval-header">
-          <span className="eyebrow">Permission approval</span>
-          <span className="badge danger">pending</span>
-        </div>
+        {renderPendingHeader("Permission approval")}
         <p className="approval-copy">{asString(request.params?.reason) || "Codex requested additional permissions."}</p>
         <pre className="code-slab">{JSON.stringify(requestedPermissions ?? {}, null, 2)}</pre>
         <div className="approval-actions">
@@ -125,10 +121,7 @@ export function ApprovalCard(props: ApprovalCardProps) {
 
     return (
       <div className="approval-card">
-        <div className="approval-header">
-          <span className="eyebrow">Tool input</span>
-          <span className="badge danger">pending</span>
-        </div>
+        {renderPendingHeader("Tool input")}
         <div className="tool-question-list">
           {questions.map((question, index) => {
             if (!isRecord(question) || typeof question.id !== "string") {

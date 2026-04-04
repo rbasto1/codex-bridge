@@ -166,6 +166,35 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
     return hasUnreadThread ? "unread" : null;
   }
 
+  function getProjectTileData(project: string) {
+    const projectId = encodeProjectId(project);
+    const stateEntry = projectState.find((entry) => entry.id === project);
+
+    return {
+      projectId,
+      hasIcon: projectId in projectIconVersions,
+      tileLabel: formatProjectTileLabel(stateEntry?.name || project),
+      projectIndicatorState: getProjectIndicatorState(project),
+    };
+  }
+
+  function renderSessionRow(threadId: string) {
+    const activeTagNames = sessionStateByThreadId[threadId]?.tags ?? [];
+    const activeTags = availableTags.filter((tag) => activeTagNames.includes(tag.name));
+
+    return (
+      <SessionRow
+        key={threadId}
+        threadId={threadId}
+        active={threadId === activeThreadId}
+        tags={activeTags}
+        showUnread={Boolean(unreadThreadIds[threadId]) && threadId !== activeThreadId}
+        onOpen={() => openThread(threadId)}
+        onToggleDone={() => onToggleThreadDone(threadId)}
+      />
+    );
+  }
+
   return (
     <>
       <button
@@ -187,12 +216,8 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
           </div>
           <div className="project-rail-list">
             {visibleProjects.map((project) => {
-              const projectId = encodeProjectId(project);
-              const hasIcon = projectId in projectIconVersions;
-              const stateEntry = projectState.find((entry) => entry.id === project);
-              const tileLabel = formatProjectTileLabel(stateEntry?.name || project);
+              const { projectId, hasIcon, tileLabel, projectIndicatorState } = getProjectTileData(project);
               const isDragOver = dragOverProject === project && draggedProject !== project;
-              const projectIndicatorState = getProjectIndicatorState(project);
 
               return (
                 <div
@@ -258,11 +283,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
                   {showHiddenProjects ? "\u25B2" : "\u2026"}
                 </button>
                 {showHiddenProjects ? overflowProjects.map((project) => {
-                  const projectId = encodeProjectId(project);
-                  const hasIcon = projectId in projectIconVersions;
-                  const stateEntry = projectState.find((entry) => entry.id === project);
-                  const tileLabel = formatProjectTileLabel(stateEntry?.name || project);
-                  const projectIndicatorState = getProjectIndicatorState(project);
+                  const { projectId, hasIcon, tileLabel, projectIndicatorState } = getProjectTileData(project);
 
                   return (
                     <div key={project} className="project-tile-wrapper">
@@ -340,21 +361,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
           </div>
 
           <div className="session-list">
-            {visibleThreadIds.map((threadId) => {
-              const activeTagNames = sessionStateByThreadId[threadId]?.tags ?? [];
-              const activeTags = availableTags.filter((tag) => activeTagNames.includes(tag.name));
-              return (
-              <SessionRow
-                key={threadId}
-                threadId={threadId}
-                active={threadId === activeThreadId}
-                tags={activeTags}
-                showUnread={Boolean(unreadThreadIds[threadId]) && threadId !== activeThreadId}
-                onOpen={() => openThread(threadId)}
-                onToggleDone={() => onToggleThreadDone(threadId)}
-              />
-              );
-            })}
+            {visibleThreadIds.map(renderSessionRow)}
             {archivedThreadIds.length > 0 || showArchivedSessions ? (
               <button
                 type="button"
@@ -364,21 +371,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
                 {showArchivedSessions ? "Hide archived" : `Load more (${archivedThreadIds.length} archived)`}
               </button>
             ) : null}
-            {showArchivedSessions ? archivedThreadIds.map((threadId) => {
-              const activeTagNames = sessionStateByThreadId[threadId]?.tags ?? [];
-              const activeTags = availableTags.filter((tag) => activeTagNames.includes(tag.name));
-              return (
-              <SessionRow
-                key={threadId}
-                threadId={threadId}
-                active={threadId === activeThreadId}
-                tags={activeTags}
-                showUnread={Boolean(unreadThreadIds[threadId]) && threadId !== activeThreadId}
-                onOpen={() => openThread(threadId)}
-                onToggleDone={() => onToggleThreadDone(threadId)}
-              />
-              );
-            }) : null}
+            {showArchivedSessions ? archivedThreadIds.map(renderSessionRow) : null}
             {!listLoading && filteredThreadIds.length === 0 ? (
               <div className="empty-card small-empty">No sessions match the current project.</div>
             ) : null}
