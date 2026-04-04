@@ -18,14 +18,10 @@ export function ThreadHeader(props: ThreadHeaderProps) {
     archived,
     availableTags,
     currentThreadIsUiDraft,
-    isLive,
     tags,
     thread,
-    threadLoadingId,
     onCreateTag,
     onDeleteDraft,
-    onOpenLive,
-    onOpenReplay,
     onRename,
     onToggleArchived,
     onToggleTag,
@@ -139,173 +135,148 @@ export function ThreadHeader(props: ThreadHeaderProps) {
   return (
     <section className="thread-header">
       <div className="workspace-column thread-header-column">
-        <div className="thread-header-main">
-          <div className="thread-title-row">
-            <span className={`thread-status-dot ${thread.status.type === "active" ? "running" : "idle"}`} />
-            {isEditingTitle ? (
-              <input
-                ref={titleInputRef}
-                className="thread-title-input"
-                value={renameDraft}
-                onChange={(event) => setRenameDraft(event.target.value)}
-                onBlur={() => void handleRename()}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    void handleRename();
-                  }
+        <div className="thread-title-row">
+          <span className={`thread-status-dot ${thread.status.type === "active" ? "running" : "idle"}`} />
+          {isEditingTitle ? (
+            <input
+              ref={titleInputRef}
+              className="thread-title-input"
+              value={renameDraft}
+              onChange={(event) => setRenameDraft(event.target.value)}
+              onBlur={() => void handleRename()}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void handleRename();
+                }
 
-                  if (event.key === "Escape") {
-                    event.preventDefault();
-                    handleCancelRename();
-                  }
-                }}
-                placeholder={thread.preview || thread.id}
-                disabled={isRenaming}
-              />
-            ) : (
-              <button
-                type="button"
-                className="thread-title-button"
-                onClick={() => setIsEditingTitle(true)}
-                title={renameDraft || thread.preview || thread.id}
-              >
-                {renameDraft || thread.preview || thread.id}
-              </button>
-            )}
-          </div>
-
-          <div className="thread-meta-row">
-            <span className={`badge ${currentThreadIsUiDraft || isLive ? "badge-live" : "badge-replay"}`}>
-              {currentThreadIsUiDraft ? "Draft" : isLive ? "Live" : "Replay only"}
-            </span>
-          </div>
-        </div>
-
-        <div className="thread-header-actions">
-          {!currentThreadIsUiDraft ? (
-            <>
-            <button type="button" className="button secondary" onClick={onOpenReplay}>
-              Refresh replay
-            </button>
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  handleCancelRename();
+                }
+              }}
+              placeholder={thread.preview || thread.id}
+              disabled={isRenaming}
+            />
+          ) : (
             <button
               type="button"
-              className="button primary"
-              onClick={onOpenLive}
-              disabled={threadLoadingId === thread.id}
+              className="thread-title-button"
+              onClick={() => setIsEditingTitle(true)}
+              title={renameDraft || thread.preview || thread.id}
             >
-              {isLive ? "Live" : threadLoadingId === thread.id ? "Attaching..." : "Resume live"}
+              {renameDraft || thread.preview || thread.id}
             </button>
-            </>
-          ) : null}
-            <div ref={menuRef} className="thread-menu-wrap">
-              <button
-                type="button"
-                className={`thread-menu-toggle ${menuOpen ? "open" : ""}`}
-                onClick={() => {
-                  setMenuOpen((value) => !value);
-                  setCreateError(null);
-                }}
-                aria-label="Session options"
-                title="Session options"
-              >
-                <DotsGlyph />
-              </button>
+          )}
 
-              {menuOpen ? (
-                <div className="thread-menu-panel">
-                  {currentThreadIsUiDraft ? (
-                    <button type="button" className="thread-menu-item" onClick={onDeleteDraft}>
-                      Delete draft
+          <div ref={menuRef} className="thread-menu-wrap">
+            <button
+              type="button"
+              className={`thread-menu-toggle ${menuOpen ? "open" : ""}`}
+              onClick={() => {
+                setMenuOpen((value) => !value);
+                setCreateError(null);
+              }}
+              aria-label="Session options"
+              title="Session options"
+            >
+              <DotsGlyph />
+            </button>
+
+            {menuOpen ? (
+              <div className="thread-menu-panel">
+                {currentThreadIsUiDraft ? (
+                  <button type="button" className="thread-menu-item" onClick={onDeleteDraft}>
+                    Delete draft
+                  </button>
+                ) : (
+                  <>
+                    <button type="button" className="thread-menu-item" onClick={onToggleArchived}>
+                      {archived ? "Unarchive session" : "Archive session"}
                     </button>
-                  ) : (
-                    <>
-                      <button type="button" className="thread-menu-item" onClick={onToggleArchived}>
-                        {archived ? "Unarchive session" : "Archive session"}
+
+                    <div className="thread-menu-section">
+                      <div className="thread-menu-label">Tags</div>
+                      {visibleTags.length > 0 ? (
+                        <div className="thread-menu-tag-list">
+                          {visibleTags.map((tag) => (
+                            <span key={tag.name} className="thread-menu-tag-chip">
+                              <span className="session-tag-dot" style={{ backgroundColor: tag.color }} />
+                              <span>{tag.name}</span>
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      {visibleAvailableTags.map((tag) => {
+                        const activeTag = tags.some((entry) => entry.name === tag.name);
+                        return (
+                          <button
+                            key={tag.name}
+                            type="button"
+                            className={`session-tag-option ${activeTag ? "active" : ""}`}
+                            onClick={() => onToggleTag(tag.name)}
+                          >
+                            <span className="session-tag-option-label">
+                              <span className="session-tag-dot" style={{ backgroundColor: tag.color }} />
+                              <span>{tag.name}</span>
+                            </span>
+                            <span>{activeTag ? "On" : "Off"}</span>
+                          </button>
+                        );
+                      })}
+
+                      <button
+                        type="button"
+                        className="session-tag-add"
+                        onClick={() => {
+                          setCreatingTag((value) => !value);
+                          setCreateError(null);
+                        }}
+                      >
+                        Add tag
                       </button>
 
-                      <div className="thread-menu-section">
-                        <div className="thread-menu-label">Tags</div>
-                        {visibleTags.length > 0 ? (
-                          <div className="thread-menu-tag-list">
-                            {visibleTags.map((tag) => (
-                              <span key={tag.name} className="thread-menu-tag-chip">
-                                <span className="session-tag-dot" style={{ backgroundColor: tag.color }} />
-                                <span>{tag.name}</span>
-                              </span>
+                      {creatingTag ? (
+                        <div className="session-tag-create">
+                          <input
+                            className="session-tag-input"
+                            value={tagNameDraft}
+                            onChange={(event) => setTagNameDraft(event.target.value)}
+                            placeholder="Tag name"
+                          />
+                          <div className="session-tag-colors">
+                            {DEFAULT_TAG_COLORS.map((color) => (
+                              <button
+                                key={color}
+                                type="button"
+                                className={`session-tag-color-swatch ${tagColorDraft.toLowerCase() === color.toLowerCase() ? "active" : ""}`}
+                                style={{ backgroundColor: color }}
+                                onClick={() => setTagColorDraft(color)}
+                                title={color}
+                                aria-label={`Select ${color}`}
+                              />
                             ))}
                           </div>
-                        ) : null}
-
-                        {visibleAvailableTags.map((tag) => {
-                          const activeTag = tags.some((entry) => entry.name === tag.name);
-                          return (
-                            <button
-                              key={tag.name}
-                              type="button"
-                              className={`session-tag-option ${activeTag ? "active" : ""}`}
-                              onClick={() => onToggleTag(tag.name)}
-                            >
-                              <span className="session-tag-option-label">
-                                <span className="session-tag-dot" style={{ backgroundColor: tag.color }} />
-                                <span>{tag.name}</span>
-                              </span>
-                              <span>{activeTag ? "On" : "Off"}</span>
-                            </button>
-                          );
-                        })}
-
-                        <button
-                          type="button"
-                          className="session-tag-add"
-                          onClick={() => {
-                            setCreatingTag((value) => !value);
-                            setCreateError(null);
-                          }}
-                        >
-                          Add tag
-                        </button>
-
-                        {creatingTag ? (
-                          <div className="session-tag-create">
-                            <input
-                              className="session-tag-input"
-                              value={tagNameDraft}
-                              onChange={(event) => setTagNameDraft(event.target.value)}
-                              placeholder="Tag name"
-                            />
-                            <div className="session-tag-colors">
-                              {DEFAULT_TAG_COLORS.map((color) => (
-                                <button
-                                  key={color}
-                                  type="button"
-                                  className={`session-tag-color-swatch ${tagColorDraft.toLowerCase() === color.toLowerCase() ? "active" : ""}`}
-                                  style={{ backgroundColor: color }}
-                                  onClick={() => setTagColorDraft(color)}
-                                  title={color}
-                                  aria-label={`Select ${color}`}
-                                />
-                              ))}
-                            </div>
-                            <input
-                              className="session-tag-input"
-                              value={tagColorDraft}
-                              onChange={(event) => setTagColorDraft(event.target.value)}
-                              placeholder="#22c55e"
-                            />
-                            {createError ? <div className="session-tag-error">{createError}</div> : null}
-                            <button type="button" className="session-tag-create-submit" onClick={handleCreateTag}>
-                              Create tag
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    </>
-                  )}
-                </div>
-              ) : null}
-            </div>
+                          <input
+                            className="session-tag-input"
+                            value={tagColorDraft}
+                            onChange={(event) => setTagColorDraft(event.target.value)}
+                            placeholder="#22c55e"
+                          />
+                          {createError ? <div className="session-tag-error">{createError}</div> : null}
+                          <button type="button" className="session-tag-create-submit" onClick={handleCreateTag}>
+                            Create tag
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : null}
           </div>
+        </div>
       </div>
     </section>
   );

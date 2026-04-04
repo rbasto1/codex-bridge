@@ -247,13 +247,9 @@ export interface PermissionShieldIconProps {
 export interface ThreadHeaderProps {
   thread: Thread;
   currentThreadIsUiDraft: boolean;
-  isLive: boolean;
-  threadLoadingId: string | null;
   archived: boolean;
   availableTags: TagDefinition[];
   tags: TagDefinition[];
-  onOpenReplay: () => void;
-  onOpenLive: () => void;
   onRename: (name: string) => Promise<void>;
   onDeleteDraft: () => void;
   onToggleArchived: () => void;
@@ -295,6 +291,7 @@ export interface ProjectSidebarProps {
   availableTags: TagDefinition[];
   backendStatus: AppServerStatus;
   currentProject: string;
+   envHome: string;
   hiddenProjects: string[];
   listLoading: boolean;
   overflowProjects: string[];

@@ -16,6 +16,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
     availableTags,
     backendStatus,
     currentProject,
+    envHome,
     listLoading,
     overflowProjects,
     projectIconVersions,
@@ -82,6 +83,9 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
 
     return currentProject.split("/").filter(Boolean).pop() ?? "Codex Bridge";
   })();
+  const sidebarProjectPath = envHome && currentProject.startsWith(envHome)
+    ? `~${currentProject.slice(envHome.length)}`
+    : currentProject;
 
   function handleDragStart(project: string, event: DragEvent) {
     setDraggedProject(project);
@@ -303,6 +307,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
           <div className="sidebar-header">
             <div style={{ minWidth: 0, flex: 1 }}>
               <h1 className="sidebar-title">{sidebarProjectLabel}</h1>
+              {currentProject ? <div className="sidebar-subtitle">{sidebarProjectPath}</div> : null}
             </div>
             <button type="button" className="sidebar-toggle" onClick={toggleSidebar} title="Collapse sidebar">
               &#x2190;

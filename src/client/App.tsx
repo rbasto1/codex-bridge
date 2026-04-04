@@ -527,6 +527,7 @@ export default function App() {
         availableTags={projectManager.projectTags}
         backendStatus={backendStatus}
         currentProject={projectManager.currentProject}
+        envHome={projectManager.envHome}
         hiddenProjects={projectManager.hiddenProjects}
         listLoading={listLoading}
         overflowProjects={projectManager.overflowProjects}
@@ -575,15 +576,11 @@ export default function App() {
             <ThreadHeader
               thread={currentThread}
               currentThreadIsUiDraft={currentThreadIsUiDraft}
-              isLive={composer.isLive}
-              threadLoadingId={threadLoadingId}
               archived={Boolean(projectManager.projectSessionStateByThreadId[currentThread.id]?.archived)}
               availableTags={projectManager.projectTags}
               tags={projectManager.projectTags.filter((tag) => (
                 projectManager.projectSessionStateByThreadId[currentThread.id]?.tags ?? []
               ).includes(tag.name))}
-              onOpenReplay={() => void openThread(currentThread.id, "replay")}
-              onOpenLive={() => void openThread(currentThread.id, "live")}
               onRename={handleRenameThread}
               onDeleteDraft={handleDeleteDraft}
               onToggleArchived={() => projectManager.toggleThreadArchived(currentThread.id)}
