@@ -3,17 +3,19 @@ import {
   asString,
   extractFileChangePaths,
   normalizeStringArray,
+  normalizeItemType,
   renderUserInputs,
 } from "../lib/threads";
 import { MarkdownBlock } from "./MarkdownBlock";
 
 export function TranscriptItemBody(props: TranscriptItemBodyProps) {
   const { item } = props;
+  const itemType = normalizeItemType(item.type);
 
-  switch (item.type) {
-    case "userMessage":
+  switch (itemType) {
+    case "usermessage":
       return <MarkdownBlock text={renderUserInputs(item.content)} preserveNewlines />;
-    case "agentMessage":
+    case "agentmessage":
       return <MarkdownBlock text={asString(item.text)} />;
     case "reasoning": {
       const summaryLines = normalizeStringArray(item.summary);
@@ -47,7 +49,7 @@ export function TranscriptItemBody(props: TranscriptItemBodyProps) {
     }
     case "plan":
       return <pre className="plain-block">{asString(item.text)}</pre>;
-    case "commandExecution":
+    case "commandexecution":
       return (
         <details className="collapsible-block">
           <summary className="collapsible-summary"><span className="collapsible-command">{asString(item.command) || "(command)"}</span></summary>
@@ -57,7 +59,7 @@ export function TranscriptItemBody(props: TranscriptItemBodyProps) {
           </div>
         </details>
       );
-    case "fileChange": {
+    case "filechange": {
       const paths = extractFileChangePaths(item);
       return (
         <div className="tool-block">
@@ -72,10 +74,10 @@ export function TranscriptItemBody(props: TranscriptItemBodyProps) {
         </div>
       );
     }
-    case "enteredReviewMode":
-    case "exitedReviewMode":
+    case "enteredreviewmode":
+    case "exitedreviewmode":
       return <p>{asString(item.review)}</p>;
-    case "contextCompaction":
+    case "contextcompaction":
       return <p>Context compaction was recorded for this turn.</p>;
     default:
       return <pre className="code-slab">{JSON.stringify(item, null, 2)}</pre>;

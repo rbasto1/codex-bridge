@@ -1083,6 +1083,156 @@ button {
 }
 
 /* ── Transcript pane ───────────────────────────── */
+.thread-plan-panel {
+  margin-bottom: 18px;
+  border: 1px solid var(--border-weak);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised-stronger);
+  overflow: hidden;
+}
+
+.thread-plan-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.thread-plan-summary::-webkit-details-marker {
+  display: none;
+}
+
+.thread-plan-summary::before {
+  content: "▸";
+  font-size: 10px;
+  color: var(--text-weaker);
+  transition: transform 0.15s ease;
+}
+
+.thread-plan-panel[open] > .thread-plan-summary::before {
+  transform: rotate(90deg);
+}
+
+.thread-plan-title {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-strong);
+}
+
+.thread-plan-meta {
+  font-size: var(--font-size-sm);
+  color: var(--text-weak);
+}
+
+.thread-plan-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--border-weaker);
+}
+
+.thread-plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.thread-plan-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.thread-plan-status {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  margin-top: 4px;
+  flex: 0 0 auto;
+  border: 1px solid var(--text-weaker);
+  border-radius: 3px;
+  background: transparent;
+}
+
+.thread-plan-status.is-completed {
+  border-color: rgba(18, 201, 5, 0.65);
+  background: rgba(18, 201, 5, 0.14);
+}
+
+.thread-plan-status.is-completed::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 1px;
+  width: 4px;
+  height: 7px;
+  border-right: 2px solid var(--color-success);
+  border-bottom: 2px solid var(--color-success);
+  transform: rotate(45deg);
+}
+
+.thread-plan-status.is-in-progress {
+  width: 14px;
+  height: 14px;
+  margin-top: 4px;
+  border: none;
+  background: transparent;
+}
+
+.thread-plan-status.is-in-progress::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--color-warning);
+  animation: session-pulse 1.2s ease-in-out infinite;
+}
+
+.thread-plan-status.is-pending {
+  border-color: var(--text-weaker);
+  background: transparent;
+}
+
+.thread-plan-text {
+  color: var(--text-base);
+  line-height: var(--line-height-large);
+}
+
+.thread-plan-row.is-completed .thread-plan-text {
+  color: var(--text-weak);
+  text-decoration: line-through;
+}
+
+.thread-plan-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: var(--font-size-sm);
+  color: var(--text-weak);
+}
+
+.thread-plan-empty {
+  margin: 0;
+  color: var(--text-weak);
+  font-size: var(--font-size-sm);
+}
+
+.thread-plan-raw {
+  margin-top: 0;
+}
+
 .transcript-pane {
   display: flex;
   flex-direction: column;

@@ -202,6 +202,10 @@ export interface TranscriptViewProps {
   onForkMessage: (threadId: string, turnId: string, itemId: string) => void;
 }
 
+export interface ThreadPlanPanelProps {
+  threadId: string;
+}
+
 export interface TurnBlockProps extends TranscriptViewProps {
   turnId: string;
 }

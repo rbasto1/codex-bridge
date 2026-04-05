@@ -6,6 +6,14 @@ import type {
 } from "../shared/codex.js";
 import { isRecord } from "../shared/codex.js";
 
+export type PlanTaskStatus = "completed" | "inProgress" | "pending" | "unknown";
+
+export interface PlanTask {
+  key: string;
+  text: string;
+  status: PlanTaskStatus;
+}
+
 export function normalizeStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -51,7 +59,7 @@ export function buildTurnAgentCopyText(items: ThreadItem[], status: TurnStatus |
   }
 
   return items
-    .filter((item) => item.type === "agentMessage")
+    .filter((item) => isItemType(item, "agentMessage"))
     .map((item) => asString(item.text))
     .filter(Boolean)
     .join("\n\n");
@@ -118,11 +126,33 @@ export function formatRelativeTime(timestampSeconds: number): string {
 }
 
 export function formatItemLabel(type: string): string {
-  if (type === "userMessage" || type === "agentMessage" || type === "commandExecution") {
+  const normalizedType = normalizeItemType(type);
+  if (normalizedType === "usermessage" || normalizedType === "agentmessage" || normalizedType === "commandexecution") {
     return "";
   }
 
   return type.replace(/([A-Z])/g, " $1").toLowerCase();
+}
+
+export function normalizeItemType(type: string): string {
+  return typeof type === "string" ? type.trim().toLowerCase() : "";
+}
+
+export function isItemType(item: Pick<ThreadItem, "type"> | null | undefined, expectedType: string): boolean {
+  return normalizeItemType(item?.type ?? "") === normalizeItemType(expectedType);
+}
+
+export function extractPlanTasks(item: ThreadItem | null | undefined): PlanTask[] {
+  if (!item) {
+    return [];
+  }
+
+  const structuredTasks = extractStructuredPlanTasks(item);
+  if (structuredTasks.length > 0) {
+    return structuredTasks;
+  }
+
+  return parsePlanText(asString(item.text));
 }
 
 export function createUiDraftThread(cwd: string): Thread {
@@ -197,4 +227,94 @@ export function copyThreadScopedState<T>(
 
 export function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function extractStructuredPlanTasks(item: ThreadItem): PlanTask[] {
+  if (!Array.isArray(item.steps)) {
+    return [];
+  }
+
+  return item.steps
+    .map((entry, index) => {
+      if (!isRecord(entry)) {
+        return null;
+      }
+
+      const text = typeof entry.step === "string"
+        ? entry.step
+        : (typeof entry.text === "string" ? entry.text : "");
+      if (!text.trim()) {
+        return null;
+      }
+
+      return {
+        key: `${item.id}-step-${index}`,
+        text: text.trim(),
+        status: normalizePlanStatus(entry.status),
+      } satisfies PlanTask;
+    })
+    .filter((entry): entry is PlanTask => Boolean(entry));
+}
+
+function parsePlanText(text: string): PlanTask[] {
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const tasks: PlanTask[] = [];
+
+  for (const [index, line] of lines.entries()) {
+    const checkboxMatch = line.match(/^[-*+]\s+\[( |x|X)\]\s+(.+)$/);
+    if (checkboxMatch) {
+      tasks.push({
+        key: `checkbox-${index}`,
+        text: checkboxMatch[2].trim(),
+        status: checkboxMatch[1].toLowerCase() === "x" ? "completed" : "pending",
+      });
+      continue;
+    }
+
+    const explicitStatusMatch = line.match(
+      /^(?:[-*+]\s+|\d+\.\s+)(?:\*\*)?(pending|in[\s_-]?progress|completed)(?:\*\*)?:?\s+(.+)$/i,
+    );
+    if (explicitStatusMatch) {
+      tasks.push({
+        key: `status-${index}`,
+        text: explicitStatusMatch[2].trim(),
+        status: normalizePlanStatus(explicitStatusMatch[1]),
+      });
+      continue;
+    }
+
+    if (/^\d+\.\s+/.test(line)) {
+      tasks.push({
+        key: `ordered-${index}`,
+        text: line.replace(/^\d+\.\s+/, "").trim(),
+        status: "unknown",
+      });
+    }
+  }
+
+  return tasks;
+}
+
+function normalizePlanStatus(value: unknown): PlanTaskStatus {
+  if (typeof value !== "string") {
+    return "unknown";
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "completed") {
+    return "completed";
+  }
+
+  if (normalized === "pending") {
+    return "pending";
+  }
+
+  if (normalized === "in_progress" || normalized === "in-progress" || normalized === "in progress") {
+    return "inProgress";
+  }
+
+  return "unknown";
 }

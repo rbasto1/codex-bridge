@@ -9,7 +9,7 @@ import { WebSocket, WebSocketServer } from "ws";
 
 import { CodexAppServerBridge, RpcResponseError } from "./codexAppServer.js";
 import { AUTH_COOKIE_NAME, AUTH_QUERY_PARAM } from "../shared/auth.js";
-import { isRecord, type RequestId, type RpcError } from "../shared/codex.js";
+import { isRecord, type RequestId, type RpcError, type Thread, type ThreadItem, type Turn } from "../shared/codex.js";
 
 const PORT = Number(process.env.SERVER_PORT ?? process.env.PORT ?? 4095);
 const AUTH_DISABLED = ["1", "true"].includes((process.env.AUTH_DISABLED ?? "").trim().toLowerCase());
@@ -111,7 +111,7 @@ app.get("/api/env/home", (_request, response) => {
 
 for (const method of RPC_METHODS) {
   app.post(`/api/${method}`, async (request, response) => {
-    await handleJsonRequest(response, async () => bridge.request(method, request.body));
+    await handleJsonRequest(response, async () => augmentRpcResult(method, await bridge.request(method, request.body)));
   });
 }
 
@@ -474,6 +474,157 @@ async function handleJsonRequest(response: Response, handler: () => Promise<unkn
       },
     });
   }
+}
+
+function augmentRpcResult(method: string, result: unknown): unknown {
+  if (!isRecord(result)) {
+    return result;
+  }
+
+  if ((method === "thread/read" || method === "thread/resume") && isRecord(result.thread)) {
+    return {
+      ...result,
+      thread: injectPlanItems(result.thread as Thread),
+    };
+  }
+
+  return result;
+}
+
+function injectPlanItems(thread: Thread): Thread {
+  if (!thread.path || !Array.isArray(thread.turns) || thread.turns.length === 0) {
+    return thread;
+  }
+
+  const planByTurnId = readPlanItemsByTurnId(thread.path);
+  if (planByTurnId.size === 0) {
+    return thread;
+  }
+
+  return {
+    ...thread,
+    turns: thread.turns.map((turn) => injectPlanItemIntoTurn(turn, planByTurnId.get(turn.id) ?? null)),
+  };
+}
+
+function injectPlanItemIntoTurn(turn: Turn, planItem: ThreadItem | null): Turn {
+  if (!planItem) {
+    return turn;
+  }
+
+  const hasExistingPlan = Array.isArray(turn.items) && turn.items.some((item) => (
+    isRecord(item) && typeof item.type === "string" && item.type.toLowerCase() === "plan"
+  ));
+  if (hasExistingPlan) {
+    return turn;
+  }
+
+  const userMessageIndex = turn.items.findIndex((item) => isRecord(item) && item.type === "userMessage");
+  const insertAt = userMessageIndex >= 0 ? userMessageIndex + 1 : 0;
+  const items = [...turn.items];
+  items.splice(insertAt, 0, planItem);
+
+  return {
+    ...turn,
+    items,
+  };
+}
+
+function readPlanItemsByTurnId(sessionPath: string): Map<string, ThreadItem> {
+  let text = "";
+
+  try {
+    text = readFileSync(sessionPath, "utf-8");
+  } catch {
+    return new Map();
+  }
+
+  const planByTurnId = new Map<string, ThreadItem>();
+  let currentTurnId: string | null = null;
+
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) {
+      continue;
+    }
+
+    let entry: unknown;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      continue;
+    }
+
+    if (!isRecord(entry) || !isRecord(entry.payload)) {
+      continue;
+    }
+
+    if (entry.type === "event_msg" && entry.payload.type === "task_started" && typeof entry.payload.turn_id === "string") {
+      currentTurnId = entry.payload.turn_id;
+      continue;
+    }
+
+    if (entry.type === "event_msg" && entry.payload.type === "task_complete") {
+      currentTurnId = null;
+      continue;
+    }
+
+    if (
+      currentTurnId
+      && entry.type === "response_item"
+      && entry.payload.type === "function_call"
+      && entry.payload.name === "update_plan"
+      && typeof entry.payload.arguments === "string"
+    ) {
+      const planItem = parsePlanItem(currentTurnId, entry.payload.arguments);
+      if (planItem) {
+        planByTurnId.set(currentTurnId, planItem);
+      }
+    }
+  }
+
+  return planByTurnId;
+}
+
+function parsePlanItem(turnId: string, rawArguments: string): ThreadItem | null {
+  let argumentsValue: unknown;
+  try {
+    argumentsValue = JSON.parse(rawArguments);
+  } catch {
+    return null;
+  }
+
+  if (!isRecord(argumentsValue)) {
+    return null;
+  }
+
+  const steps = Array.isArray(argumentsValue.plan)
+    ? argumentsValue.plan.filter((entry): entry is Record<string, unknown> => isRecord(entry))
+    : [];
+  const explanation = typeof argumentsValue.explanation === "string" ? argumentsValue.explanation.trim() : "";
+
+  const textParts = [
+    explanation,
+    ...steps.map((entry) => {
+      const status = typeof entry.status === "string" ? entry.status : "unknown";
+      const step = typeof entry.step === "string" ? entry.step : "";
+      return step ? `- ${status}: ${step}` : "";
+    }),
+  ].filter(Boolean);
+
+  if (!explanation && steps.length === 0) {
+    return null;
+  }
+
+  return {
+    id: `${turnId}-plan`,
+    type: "plan",
+    text: textParts.join("\n"),
+    steps: steps.map((entry) => ({
+      step: typeof entry.step === "string" ? entry.step : "",
+      status: typeof entry.status === "string" ? entry.status : "unknown",
+    })),
+  };
 }
 
 function sendSocketEvent(socket: WebSocket, event: unknown): void {

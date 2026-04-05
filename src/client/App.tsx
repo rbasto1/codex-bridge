@@ -25,6 +25,7 @@ import { ProjectSidebar } from "../components/ProjectSidebar";
 import { ScrollViewport } from "../components/ScrollViewport";
 import { ThreadComposer } from "../components/ThreadComposer";
 import { ThreadHeader } from "../components/ThreadHeader";
+import { ThreadPlanPanel } from "../components/ThreadPlanPanel";
 import { TranscriptView } from "../components/TranscriptView";
 import { useAuth } from "../hooks/useAuth";
 import { useBackendInitialization } from "../hooks/useBackendInitialization";
@@ -598,6 +599,7 @@ export default function App() {
 
             <ScrollViewport key={currentThread.id} className="workspace-scroll">
               <div className="workspace-column">
+                <ThreadPlanPanel threadId={currentThread.id} />
                 <TranscriptView
                   threadId={currentThread.id}
                   respondingRequestKey={respondingRequestKey}
