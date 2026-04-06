@@ -1,5 +1,8 @@
 import { useDeferredValue, useRef, useState, type DragEvent } from "react";
 
+const SESSION_RECENCY_WINDOW_SECONDS = 7 * 24 * 60 * 60;
+const MIN_VISIBLE_SESSION_COUNT = 5;
+
 import { useAppStore } from "../client/store";
 import { encodeProjectId, formatProjectTileLabel } from "../lib/projects";
 import { useSidebarState } from "../hooks/useSidebarState";
@@ -42,6 +45,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
 
   const { isMobileViewport, sidebarCollapsed, setSidebarCollapsed, toggleSidebar } = useSidebarState();
   const [searchTerm, setSearchTerm] = useState("");
+  const [showOlderSessions, setShowOlderSessions] = useState(false);
   const [showAddProjectModal, setShowAddProjectModal] = useState(false);
   const [showArchivedSessions, setShowArchivedSessions] = useState(false);
   const [showHiddenProjects, setShowHiddenProjects] = useState(false);
@@ -71,6 +75,16 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
   });
   const visibleThreadIds = filteredThreadIds.filter((threadId) => !sessionStateByThreadId[threadId]?.archived);
   const archivedThreadIds = filteredThreadIds.filter((threadId) => sessionStateByThreadId[threadId]?.archived);
+  const recentWindowStart = Math.floor(Date.now() / 1000) - SESSION_RECENCY_WINDOW_SECONDS;
+  const recentVisibleThreadIds = visibleThreadIds.filter((threadId) => {
+    const thread = threadsById[threadId];
+    return thread ? thread.updatedAt >= recentWindowStart : false;
+  });
+  const primaryVisibleThreadIds = recentVisibleThreadIds.length >= MIN_VISIBLE_SESSION_COUNT
+    ? recentVisibleThreadIds
+    : visibleThreadIds.slice(0, MIN_VISIBLE_SESSION_COUNT);
+  const primaryVisibleThreadIdSet = new Set(primaryVisibleThreadIds);
+  const olderVisibleThreadIds = visibleThreadIds.filter((threadId) => !primaryVisibleThreadIdSet.has(threadId));
   const sidebarProjectLabel = (() => {
     if (!currentProject) {
       return "Codex Bridge";
@@ -361,15 +375,29 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
           </div>
 
           <div className="session-list">
-            {visibleThreadIds.map(renderSessionRow)}
-            {archivedThreadIds.length > 0 || showArchivedSessions ? (
-              <button
-                type="button"
-                className="session-load-more"
-                onClick={() => setShowArchivedSessions((value) => !value)}
-              >
-                {showArchivedSessions ? "Hide archived" : `Load more (${archivedThreadIds.length} archived)`}
-              </button>
+            {primaryVisibleThreadIds.map(renderSessionRow)}
+            {showOlderSessions ? olderVisibleThreadIds.map(renderSessionRow) : null}
+            {olderVisibleThreadIds.length > 0 || archivedThreadIds.length > 0 || showOlderSessions || showArchivedSessions ? (
+              <div className="session-list-controls">
+                {olderVisibleThreadIds.length > 0 || showOlderSessions ? (
+                  <button
+                    type="button"
+                    className="session-load-more"
+                    onClick={() => setShowOlderSessions((value) => !value)}
+                  >
+                    {showOlderSessions ? "Hide older sessions" : `Load more (${olderVisibleThreadIds.length} older)`}
+                  </button>
+                ) : null}
+                {archivedThreadIds.length > 0 || showArchivedSessions ? (
+                  <button
+                    type="button"
+                    className="session-load-more"
+                    onClick={() => setShowArchivedSessions((value) => !value)}
+                  >
+                    {showArchivedSessions ? "Hide archived" : `Show archived (${archivedThreadIds.length})`}
+                  </button>
+                ) : null}
+              </div>
             ) : null}
             {showArchivedSessions ? archivedThreadIds.map(renderSessionRow) : null}
             {!listLoading && filteredThreadIds.length === 0 ? (

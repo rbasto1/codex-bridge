@@ -765,6 +765,11 @@ button {
   background: var(--surface-base-hover);
 }
 
+.session-list-controls {
+  display: flex;
+  flex-direction: column;
+}
+
 .session-done-toggle {
   margin-left: 0;
 }
