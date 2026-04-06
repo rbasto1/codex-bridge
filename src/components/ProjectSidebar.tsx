@@ -1,4 +1,4 @@
-import { useDeferredValue, useRef, useState, type DragEvent } from "react";
+import { useCallback, useDeferredValue, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 const SESSION_RECENCY_WINDOW_SECONDS = 7 * 24 * 60 * 60;
 const MIN_VISIBLE_SESSION_COUNT = 5;
@@ -51,10 +51,32 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
   const [showHiddenProjects, setShowHiddenProjects] = useState(false);
   const [contextMenuProject, setContextMenuProject] = useState<ProjectContextMenuState | null>(null);
   const [editingProject, setEditingProject] = useState<string | null>(null);
-  const [draggedProject, setDraggedProject] = useState<string | null>(null);
-  const [dragOverProject, setDragOverProject] = useState<string | null>(null);
+  const [dragState, setDragState] = useState<{
+    project: string;
+    dropIndex: number;
+    pointerId: number;
+    pointerX: number;
+    pointerY: number;
+    offsetX: number;
+    offsetY: number;
+  } | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
+  const pendingDragRef = useRef<{
+    project: string;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    offsetX: number;
+    offsetY: number;
+  } | null>(null);
+  const dragStateRef = useRef<typeof dragState>(null);
+  const visibleProjectsRef = useRef(visibleProjects);
+  const reorderProjectsRef = useRef(onReorderProjects);
+  const projectTileRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const suppressProjectClickRef = useRef(false);
   const deferredSearchTerm = useDeferredValue(searchTerm.trim().toLowerCase());
+  visibleProjectsRef.current = visibleProjects;
+  reorderProjectsRef.current = onReorderProjects;
 
   const filteredThreadIds = threadOrder.filter((threadId) => {
     const thread = threadsById[threadId];
@@ -101,46 +123,143 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
     ? `~${currentProject.slice(envHome.length)}`
     : currentProject;
 
-  function handleDragStart(project: string, event: DragEvent) {
-    setDraggedProject(project);
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", project);
+  function setProjectTileRef(project: string, element: HTMLButtonElement | null) {
+    projectTileRefs.current[project] = element;
   }
 
-  function handleDragOver(project: string, event: DragEvent) {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-    if (project !== dragOverProject) {
-      setDragOverProject(project);
+  const computeDropIndex = useCallback((clientY: number, draggedProject: string) => {
+    const remainingProjects = visibleProjectsRef.current.filter((project) => project !== draggedProject);
+    for (let index = 0; index < remainingProjects.length; index += 1) {
+      const element = projectTileRefs.current[remainingProjects[index]];
+      if (!element) {
+        continue;
+      }
+
+      const rect = element.getBoundingClientRect();
+      if (clientY < rect.top + rect.height / 2) {
+        return index;
+      }
     }
-  }
 
-  function handleDrop(targetProject: string, event: DragEvent) {
-    event.preventDefault();
-    setDragOverProject(null);
-    if (!draggedProject || draggedProject === targetProject) {
-      setDraggedProject(null);
+    return remainingProjects.length;
+  }, []);
+
+  const clearDrag = useCallback(() => {
+    pendingDragRef.current = null;
+    dragStateRef.current = null;
+    setDragState(null);
+  }, []);
+
+  const handleWindowPointerMove = useCallback((event: PointerEvent) => {
+    const pendingDrag = pendingDragRef.current;
+    if (!pendingDrag) {
       return;
     }
 
-    const fromIndex = visibleProjects.indexOf(draggedProject);
-    const toIndex = visibleProjects.indexOf(targetProject);
-    if (fromIndex < 0 || toIndex < 0) {
-      setDraggedProject(null);
+    if (event.pointerId !== pendingDrag.pointerId) {
       return;
     }
 
-    const reordered = [...visibleProjects];
-    reordered.splice(fromIndex, 1);
-    reordered.splice(toIndex, 0, draggedProject);
-    onReorderProjects(reordered);
-    setDraggedProject(null);
+    const activeDrag = dragStateRef.current;
+    if (!activeDrag) {
+      const movedX = event.clientX - pendingDrag.startX;
+      const movedY = event.clientY - pendingDrag.startY;
+      if (Math.hypot(movedX, movedY) < 4) {
+        return;
+      }
+
+      const nextDragState = {
+        project: pendingDrag.project,
+        dropIndex: computeDropIndex(event.clientY, pendingDrag.project),
+        pointerId: pendingDrag.pointerId,
+        pointerX: event.clientX,
+        pointerY: event.clientY,
+        offsetX: pendingDrag.offsetX,
+        offsetY: pendingDrag.offsetY,
+      };
+      suppressProjectClickRef.current = true;
+      dragStateRef.current = nextDragState;
+      setDragState(nextDragState);
+      return;
+    }
+
+    const nextDropIndex = computeDropIndex(event.clientY, activeDrag.project);
+    const nextDragState = nextDropIndex === activeDrag.dropIndex
+      && event.clientX === activeDrag.pointerX
+      && event.clientY === activeDrag.pointerY
+      ? activeDrag
+      : {
+        ...activeDrag,
+        dropIndex: nextDropIndex,
+        pointerX: event.clientX,
+        pointerY: event.clientY,
+      };
+    if (nextDragState !== activeDrag) {
+      dragStateRef.current = nextDragState;
+      setDragState(nextDragState);
+    }
+  }, [computeDropIndex]);
+
+  const handleWindowPointerUp = useCallback((event: PointerEvent) => {
+    const pendingDrag = pendingDragRef.current;
+    if (!pendingDrag || event.pointerId !== pendingDrag.pointerId) {
+      return;
+    }
+
+    const activeDrag = dragStateRef.current;
+    if (activeDrag) {
+      const reordered = visibleProjectsRef.current.filter((project) => project !== activeDrag.project);
+      reordered.splice(activeDrag.dropIndex, 0, activeDrag.project);
+      const currentProjects = visibleProjectsRef.current;
+      const changed = reordered.length !== currentProjects.length
+        || reordered.some((project, index) => project !== currentProjects[index]);
+      if (changed) {
+        reorderProjectsRef.current(reordered);
+      }
+    }
+
+    clearDrag();
+  }, [clearDrag]);
+
+  useEffect(() => {
+    window.addEventListener("pointermove", handleWindowPointerMove);
+    window.addEventListener("pointerup", handleWindowPointerUp);
+    window.addEventListener("pointercancel", clearDrag);
+
+    return () => {
+      window.removeEventListener("pointermove", handleWindowPointerMove);
+      window.removeEventListener("pointerup", handleWindowPointerUp);
+      window.removeEventListener("pointercancel", clearDrag);
+    };
+  }, [clearDrag, handleWindowPointerMove, handleWindowPointerUp]);
+
+  function handleProjectPointerDown(project: string, event: ReactPointerEvent<HTMLButtonElement>) {
+    if (event.button !== 0 || event.ctrlKey || event.pointerType === "touch") {
+      return;
+    }
+
+    event.preventDefault();
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    pendingDragRef.current = {
+      project,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+    };
   }
 
-  function handleDragEnd() {
-    setDraggedProject(null);
-    setDragOverProject(null);
-  }
+  const previewProjects = (() => {
+    if (!dragState) {
+      return visibleProjects;
+    }
+
+    const preview = visibleProjects.filter((project) => project !== dragState.project);
+    preview.splice(dragState.dropIndex, 0, dragState.project);
+    return preview;
+  })();
 
   function openProject(project: string) {
     void (async () => {
@@ -229,24 +348,29 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
             <img src="/codex-bridge-dark.png" alt="" className="project-rail-brand-logo" />
           </div>
           <div className="project-rail-list">
-            {visibleProjects.map((project) => {
+            {previewProjects.map((project) => {
               const { projectId, hasIcon, tileLabel, projectIndicatorState } = getProjectTileData(project);
-              const isDragOver = dragOverProject === project && draggedProject !== project;
 
               return (
                 <div
                   key={project}
-                  className={`project-tile-wrapper${isDragOver ? " drag-over" : ""}${draggedProject === project ? " dragging" : ""}`}
+                  className={`project-tile-wrapper${dragState?.project === project ? " dragging" : ""}`}
                 >
                   <button
+                    ref={(element) => setProjectTileRef(project, element)}
                     type="button"
                     className={`project-tile ${project === currentProject ? "active" : ""}`}
-                    draggable
-                    onDragStart={(event) => handleDragStart(project, event)}
-                    onDragOver={(event) => handleDragOver(project, event)}
-                    onDrop={(event) => handleDrop(project, event)}
-                    onDragEnd={handleDragEnd}
-                    onClick={() => openProject(project)}
+                    draggable={false}
+                    onDragStart={(event) => event.preventDefault()}
+                    onPointerDown={(event) => handleProjectPointerDown(project, event)}
+                    onClick={(event) => {
+                      if (suppressProjectClickRef.current) {
+                        suppressProjectClickRef.current = false;
+                        event.preventDefault();
+                        return;
+                      }
+                      openProject(project);
+                    }}
                     onContextMenu={(event) => {
                       event.preventDefault();
                       setContextMenuProject({ project, x: event.clientX, y: event.clientY });
@@ -272,12 +396,14 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
                     }}
                     title={project}
                     data-project={project}
+                    data-drag-preview={dragState?.project === project ? "true" : undefined}
                   >
                     {hasIcon ? (
                       <img
                         src={`${projectIconUrl(projectId)}?v=${projectIconVersions[projectId]}`}
                         alt=""
                         className="project-tile-icon"
+                        draggable={false}
                       />
                     ) : tileLabel}
                   </button>
@@ -317,6 +443,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
                             src={`${projectIconUrl(projectId)}?v=${projectIconVersions[projectId]}`}
                             alt=""
                             className="project-tile-icon"
+                            draggable={false}
                           />
                         ) : tileLabel}
                       </button>
@@ -335,6 +462,34 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
             >
               +
             </button>
+
+            {dragState ? (() => {
+              const { projectId, hasIcon, tileLabel, projectIndicatorState } = getProjectTileData(dragState.project);
+
+              return (
+                <div
+                  className="project-drag-overlay"
+                  style={{
+                    left: dragState.pointerX - dragState.offsetX,
+                    top: dragState.pointerY - dragState.offsetY,
+                  }}
+                >
+                  <div className="project-tile-wrapper dragging-overlay">
+                    <div className={`project-tile ${dragState.project === currentProject ? "active" : ""}`}>
+                      {hasIcon ? (
+                        <img
+                          src={`${projectIconUrl(projectId)}?v=${projectIconVersions[projectId]}`}
+                          alt=""
+                          className="project-tile-icon"
+                          draggable={false}
+                        />
+                      ) : tileLabel}
+                    </div>
+                    {projectIndicatorState ? <span className={`project-status-dot ${projectIndicatorState}`} /> : null}
+                  </div>
+                </div>
+              );
+            })() : null}
           </div>
         </div>
 
