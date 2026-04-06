@@ -143,6 +143,13 @@ export interface ProjectStateSaveData {
   tags: TagDefinition[];
 }
 
+export interface ProjectPathCompletionResponse {
+  resolvedPath: string;
+  exists: boolean;
+  isDirectory: boolean;
+  suggestions: string[];
+}
+
 export interface ProjectSessionStateResponse {
   threads: Record<string, ProjectThreadState>;
 }
@@ -331,8 +338,10 @@ export interface ProjectContextMenuProps {
 }
 
 export interface AddProjectModalProps {
+  envHome: string;
   onAddProject: (project: string) => void;
   onClose: () => void;
+  projectOptions: string[];
 }
 
 export interface EditProjectModalProps {

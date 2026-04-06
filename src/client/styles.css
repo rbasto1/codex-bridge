@@ -2145,7 +2145,16 @@ details[open] > .collapsible-summary::before {
   backdrop-filter: blur(4px);
 }
 
+.modal-scrim {
+  position: absolute;
+  inset: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
 .modal-card {
+  position: relative;
   width: min(420px, 90vw);
   padding: 20px;
   background: var(--bg-weak);
@@ -2161,11 +2170,88 @@ details[open] > .collapsible-summary::before {
   color: var(--text-strong);
 }
 
+.path-suggestion-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 192px;
+  max-height: 192px;
+  margin-top: 8px;
+  padding: 6px;
+  overflow-y: auto;
+  border: 1px solid var(--border-weak);
+  border-radius: var(--radius-md);
+  background: var(--surface-base);
+}
+
+.path-suggestion-item {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  padding-right: 72px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-base);
+  font: inherit;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  appearance: none;
+}
+
+.path-suggestion-item:hover,
+.path-suggestion-item.active {
+  background: var(--surface-base-hover);
+}
+
+.path-suggestion-item:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.path-suggestion-item:disabled:hover {
+  background: transparent;
+}
+
+.path-suggestion-badge {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  padding: 2px 8px;
+  border: 1px solid var(--border-weak);
+  border-radius: 999px;
+  background: var(--surface-base);
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.path-suggestion-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .modal-actions {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
   margin-top: 16px;
+}
+
+.modal-actions.split {
+  justify-content: space-between;
+}
+
+.modal-actions-group {
+  display: flex;
+  gap: 8px;
 }
 
 .auth-modal-backdrop {
@@ -2175,6 +2261,11 @@ details[open] > .collapsible-summary::before {
 .modal-text {
   margin: 0 0 12px;
   color: var(--text-base);
+}
+
+.modal-subtle {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
 }
 
 .modal-error {

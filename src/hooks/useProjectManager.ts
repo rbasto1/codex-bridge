@@ -185,6 +185,10 @@ export function useProjectManager(options: UseProjectManagerOptions) {
       resolved = envHome + resolved.slice(1);
     }
 
+    if (resolved.length > 1) {
+      resolved = resolved.replace(/\/+$/g, "");
+    }
+
     setCustomProjects((previous) => (previous.includes(resolved) ? previous : [...previous, resolved]));
     void selectProject(resolved);
   }

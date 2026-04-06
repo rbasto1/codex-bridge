@@ -14,6 +14,7 @@ import {
 import type {
   ModelListResponse,
   ModelOption,
+  ProjectPathCompletionResponse,
   ProjectSessionStateResponse,
   ProjectSessionStateSaveData,
   ProjectStateResponse,
@@ -214,6 +215,17 @@ export async function saveProjectSessionState(project: string, data: ProjectSess
       project,
       ...data,
     }),
+  });
+}
+
+export async function fetchProjectPathCompletion(input: string): Promise<ProjectPathCompletionResponse> {
+  return requestJson<ProjectPathCompletionResponse>(`/api/projects/path-complete?input=${encodeURIComponent(input)}`);
+}
+
+export async function createProjectFolder(input: string): Promise<{ path: string }> {
+  return requestJson<{ path: string }>("/api/projects/folder", {
+    method: "POST",
+    body: JSON.stringify({ path: input }),
   });
 }
 

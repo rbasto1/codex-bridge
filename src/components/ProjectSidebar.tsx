@@ -23,6 +23,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
     listLoading,
     overflowProjects,
     projectIconVersions,
+    projectOptions,
     projectState,
     sessionStateByThreadId,
     threadOrder,
@@ -586,8 +587,10 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
 
       {showAddProjectModal ? (
         <AddProjectModal
+          envHome={envHome}
           onAddProject={onAddProject}
           onClose={() => setShowAddProjectModal(false)}
+          projectOptions={projectOptions}
         />
       ) : null}
     </>

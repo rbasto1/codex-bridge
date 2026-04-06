@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage } from "node:http";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -321,6 +321,49 @@ function sanitizeTagDefinitions(value: unknown): Array<{ name: string; color: st
   return tags.some((tag) => tag.name === "done") ? tags : [...tags, DEFAULT_PROJECT_STATE.tags[0]];
 }
 
+function resolveInputPath(input: string): string {
+  const trimmed = input.trim();
+  const home = process.env.HOME ?? "";
+  const expanded = trimmed.startsWith("~") && home
+    ? path.join(home, trimmed.slice(1))
+    : trimmed;
+  return path.resolve(expanded || ".");
+}
+
+function getPathStatus(filePath: string) {
+  try {
+    const stats = statSync(filePath);
+    return { exists: true, isDirectory: stats.isDirectory() };
+  } catch {
+    return { exists: false, isDirectory: false };
+  }
+}
+
+function listDirectorySuggestions(input: string): string[] {
+  const trimmed = input.trim();
+  if (!trimmed.startsWith("/") && !trimmed.startsWith("~")) {
+    return [];
+  }
+
+  const home = process.env.HOME ?? "";
+  const expanded = trimmed.startsWith("~") && home
+    ? path.join(home, trimmed.slice(1))
+    : trimmed;
+  const hasTrailingSeparator = expanded.endsWith(path.sep);
+  const directory = hasTrailingSeparator ? expanded : path.dirname(expanded);
+  const partialName = hasTrailingSeparator ? "" : path.basename(expanded);
+
+  try {
+    return readdirSync(directory, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name.toLowerCase().startsWith(partialName.toLowerCase()))
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .slice(0, 20)
+      .map((entry) => path.join(directory, entry.name));
+  } catch {
+    return [];
+  }
+}
+
 app.get("/api/projects/state", (_request, response) => {
   ensureCodexDir();
   const filePath = path.join(CODEX_DIR, "state.json");
@@ -362,6 +405,31 @@ app.post("/api/projects/session-state", (request, response) => {
     JSON.stringify(sanitizeProjectSessionState(request.body), null, 2),
   );
   response.json({ ok: true });
+});
+
+app.get("/api/projects/path-complete", (request, response) => {
+  const input = typeof request.query.input === "string" ? request.query.input : "";
+  const resolvedPath = resolveInputPath(input);
+  const { exists, isDirectory } = getPathStatus(resolvedPath);
+  const suggestions = listDirectorySuggestions(input);
+  response.json({ resolvedPath, exists, isDirectory, suggestions });
+});
+
+app.post("/api/projects/folder", (request, response) => {
+  if (!isRecord(request.body) || typeof request.body.path !== "string") {
+    response.status(400).json({ error: { code: -32000, message: "path is required." } });
+    return;
+  }
+
+  const resolvedPath = resolveInputPath(request.body.path);
+  const status = getPathStatus(resolvedPath);
+  if (status.exists && !status.isDirectory) {
+    response.status(400).json({ error: { code: -32000, message: "Path exists but is not a directory." } });
+    return;
+  }
+
+  mkdirSync(resolvedPath, { recursive: true });
+  response.json({ path: resolvedPath });
 });
 
 app.get("/api/projects/icons/:projectId", (request, response) => {
