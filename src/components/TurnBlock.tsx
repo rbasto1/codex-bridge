@@ -1,6 +1,7 @@
 import { useShallow } from "zustand/react/shallow";
 
 import { useAppStore } from "../client/store";
+import { getErrorMessage } from "../lib/errors";
 import type { TurnBlockProps } from "../types";
 import { buildTurnAgentCopyText } from "../lib/threads";
 import { ApprovalCard } from "./ApprovalCard";
@@ -33,6 +34,8 @@ export function TurnBlock(props: TurnBlockProps) {
     ),
   );
   const agentCopyText = buildTurnAgentCopyText(turnItems, turn?.status);
+  const turnFailed = turn?.status === "failed";
+  const turnErrorMessage = turnFailed ? getErrorMessage(turn.error).trim() || "Turn failed" : "";
 
   return (
     <div className="turn-card">
@@ -67,6 +70,12 @@ export function TurnBlock(props: TurnBlockProps) {
               onRespond={onRespond}
             />
           ))}
+
+          {turnFailed ? (
+            <section className="turn-error-banner" role="alert" aria-live="polite">
+              <span>{turnErrorMessage}</span>
+            </section>
+          ) : null}
         </div>
 
         {agentCopyText ? (
