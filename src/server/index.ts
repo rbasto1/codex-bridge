@@ -45,28 +45,40 @@ app.use("/api", (request, response, next) => {
   response.status(401).json({ error: { code: -32001, message: "Unauthorized." } });
 });
 
-function getThreadTitleGenerationConfig() {
+type ThreadTitleGenerationConfig = {
+  apiKey: string;
+  apiUrl: string;
+  label: "OpenAI" | "OpenRouter";
+  model: string;
+  reasoningEffort: "none" | "minimal";
+};
+
+function getThreadTitleGenerationConfigs(): ThreadTitleGenerationConfig[] {
+  const configs: ThreadTitleGenerationConfig[] = [];
   const openAiApiKey = process.env.OPENAI_API_KEY?.trim();
+  const openRouterApiKey = process.env.OPENROUTER_API_KEY?.trim();
+
   if (openAiApiKey) {
-    return {
+    configs.push({
       apiKey: openAiApiKey,
       apiUrl: "https://api.openai.com/v1/chat/completions",
-      errorLabel: "OpenAI",
+      label: "OpenAI",
       model: "gpt-5-mini",
-    };
+      reasoningEffort: "none",
+    });
   }
 
-  const openRouterApiKey = process.env.OPENROUTER_API_KEY?.trim();
   if (openRouterApiKey) {
-    return {
+    configs.push({
       apiKey: openRouterApiKey,
       apiUrl: "https://openrouter.ai/api/v1/chat/completions",
-      errorLabel: "OpenRouter",
+      label: "OpenRouter",
       model: "openai/gpt-5-mini",
-    };
+      reasoningEffort: "minimal",
+    });
   }
 
-  return null;
+  return configs;
 }
 
 function getThreadTitleFallback(userMessage: string): string {
@@ -76,6 +88,91 @@ function getThreadTitleFallback(userMessage: string): string {
   }
 
   return normalized.slice(0, 120);
+}
+
+function sanitizeGeneratedThreadTitle(value: unknown): string {
+  let name = typeof value === "string" ? value.trim().split("\n")[0] ?? "" : "";
+  name = name.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+  if (name.length > 100) {
+    name = name.slice(0, 97) + "...";
+  }
+  return name;
+}
+
+function extractGeneratedMessageContent(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (!Array.isArray(value)) {
+    return "";
+  }
+
+  return value
+    .map((part) => {
+      if (!isRecord(part) || typeof part.type !== "string") {
+        return "";
+      }
+
+      if (part.type === "text" && typeof part.text === "string") {
+        return part.text;
+      }
+
+      return "";
+    })
+    .join("");
+}
+
+async function setThreadName(threadId: string, name: string): Promise<void> {
+  await bridge.request("thread/name/set", {
+    threadId,
+    name,
+  });
+}
+
+async function generateThreadTitleWithProvider(
+  config: ThreadTitleGenerationConfig,
+  titlePrompt: string,
+  userMessage: string,
+): Promise<string> {
+  const providerResponse = await fetch(config.apiUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: config.model,
+      temperature: 0.5,
+      max_completion_tokens: 256,
+      reasoning_effort: config.reasoningEffort,
+      messages: [
+        { role: "system", content: titlePrompt },
+        { role: "user", content: userMessage },
+      ],
+    }),
+  });
+  const responseText = await providerResponse.text();
+
+  if (!providerResponse.ok) {
+    throw new Error(`${config.label} API error (${providerResponse.status}): ${responseText}`);
+  }
+
+  let data: {
+    choices: { message: { content: unknown } }[];
+  };
+
+  try {
+    data = JSON.parse(responseText) as {
+      choices: { message: { content: unknown } }[];
+    };
+  } catch (error) {
+    throw new Error(
+      `${config.label} returned non-JSON response: ${error instanceof Error ? error.message : String(error)}. Body: ${responseText}`,
+    );
+  }
+
+  return sanitizeGeneratedThreadTitle(extractGeneratedMessageContent(data.choices[0]?.message?.content));
 }
 
 // Icon upload route MUST be registered before express.json() to avoid body consumption
@@ -119,17 +216,6 @@ app.post("/api/thread/name/generate", async (request, response) => {
   await handleJsonRequest(response, async () => {
     if (!isRecord(request.body) || typeof request.body.threadId !== "string" || typeof request.body.userMessage !== "string") {
       throw new Error("threadId and userMessage are required strings.");
-    }
-
-    const titleGenerationConfig = getThreadTitleGenerationConfig();
-
-    if (!titleGenerationConfig) {
-      const name = getThreadTitleFallback(request.body.userMessage);
-      await bridge.request("thread/name/set", {
-        threadId: request.body.threadId,
-        name,
-      });
-      return { name };
     }
 
     const titlePrompt = `You are a title generator. You output ONLY a thread title. Nothing else.
@@ -176,47 +262,24 @@ Your output must be:
 "look at @config.json" → Config review
 "@App.tsx add dark mode toggle" → Dark mode toggle in App
 </examples>`;
+    const titleGenerationConfigs = getThreadTitleGenerationConfigs();
 
-    const openaiResponse = await fetch(titleGenerationConfig.apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${titleGenerationConfig.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: titleGenerationConfig.model,
-        temperature: 0.5,
-        max_tokens: 80,
-        messages: [
-          { role: "system", content: titlePrompt },
-          { role: "user", content: request.body.userMessage },
-        ],
-      }),
-    });
+    for (const config of titleGenerationConfigs) {
+      try {
+        const name = await generateThreadTitleWithProvider(config, titlePrompt, request.body.userMessage);
+        if (!name) {
+          continue;
+        }
 
-    if (!openaiResponse.ok) {
-      const text = await openaiResponse.text();
-      throw new Error(`${titleGenerationConfig.errorLabel} API error (${openaiResponse.status}): ${text}`);
+        await setThreadName(request.body.threadId, name);
+        return { name };
+      } catch {
+      }
     }
 
-    const data = (await openaiResponse.json()) as {
-      choices: { message: { content: string } }[];
-    };
-
-    let name = (data.choices[0]?.message?.content ?? "").trim().split("\n")[0] ?? "";
-    name = name.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-    if (name.length > 100) {
-      name = name.slice(0, 97) + "...";
-    }
-
-    if (name) {
-      await bridge.request("thread/name/set", {
-        threadId: request.body.threadId,
-        name,
-      });
-    }
-
-    return { name };
+    const fallbackName = getThreadTitleFallback(request.body.userMessage);
+    await setThreadName(request.body.threadId, fallbackName);
+    return { name: fallbackName };
   });
 });
 
