@@ -127,7 +127,12 @@ export function formatRelativeTime(timestampSeconds: number): string {
 
 export function formatItemLabel(type: string): string {
   const normalizedType = normalizeItemType(type);
-  if (normalizedType === "usermessage" || normalizedType === "agentmessage" || normalizedType === "commandexecution") {
+  if (
+    normalizedType === "usermessage"
+    || normalizedType === "agentmessage"
+    || normalizedType === "commandexecution"
+    || normalizedType === "contextcompaction"
+  ) {
     return "";
   }
 
@@ -153,6 +158,14 @@ export function extractPlanTasks(item: ThreadItem | null | undefined): PlanTask[
   }
 
   return parsePlanText(asString(item.text));
+}
+
+export function extractContextCompactionMessage(item: ThreadItem | null | undefined): string {
+  if (!item) {
+    return "";
+  }
+
+  return extractContextCompactionValue(item, new Set<object>());
 }
 
 export function createUiDraftThread(cwd: string): Thread {
@@ -227,6 +240,45 @@ export function copyThreadScopedState<T>(
 
 export function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function extractContextCompactionValue(value: unknown, seen: Set<object>): string {
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => extractContextCompactionValue(entry, seen))
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+  }
+
+  if (!isRecord(value) || seen.has(value)) {
+    return "";
+  }
+
+  seen.add(value);
+
+  for (const key of [
+    "summary",
+    "summaryText",
+    "text",
+    "message",
+    "details",
+    "reason",
+    "content",
+    "contentText",
+    "description",
+  ] as const) {
+    const extracted = extractContextCompactionValue(value[key], seen);
+    if (extracted) {
+      return extracted;
+    }
+  }
+
+  return "";
 }
 
 function extractStructuredPlanTasks(item: ThreadItem): PlanTask[] {

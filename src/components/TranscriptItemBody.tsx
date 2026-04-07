@@ -1,6 +1,7 @@
 import type { TranscriptItemBodyProps } from "../types";
 import {
   asString,
+  extractContextCompactionMessage,
   extractFileChangePaths,
   normalizeStringArray,
   normalizeItemType,
@@ -77,8 +78,21 @@ export function TranscriptItemBody(props: TranscriptItemBodyProps) {
     case "enteredreviewmode":
     case "exitedreviewmode":
       return <p>{asString(item.review)}</p>;
-    case "contextcompaction":
-      return <p>Context compaction was recorded for this turn.</p>;
+    case "contextcompaction": {
+      const compactionMessage = extractContextCompactionMessage(item);
+      return (
+        <div className="context-compaction-card">
+          <p className="context-compaction-title">Earlier context was compacted for this thread.</p>
+          {compactionMessage ? (
+            <MarkdownBlock text={compactionMessage} preserveNewlines />
+          ) : (
+            <p className="context-compaction-copy">
+              Codex compacted earlier conversation history to stay within its working context window.
+            </p>
+          )}
+        </div>
+      );
+    }
     default:
       return <pre className="code-slab">{JSON.stringify(item, null, 2)}</pre>;
   }

@@ -1432,8 +1432,7 @@ button {
 .item-plan,
 .item-reasoning,
 .item-enteredReviewMode,
-.item-exitedReviewMode,
-.item-contextCompaction {
+.item-exitedReviewMode {
   position: relative;
   padding-left: 12px;
 }
@@ -1460,6 +1459,42 @@ button {
   width: 2px;
   border-radius: 2px;
   background: var(--text-weak);
+}
+
+.context-compaction-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(252, 213, 58, 0.24);
+  border-radius: var(--radius-md);
+  background: rgba(252, 213, 58, 0.05);
+}
+
+.context-compaction-title {
+  margin: 0;
+  color: var(--color-warning);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.context-compaction-copy {
+  margin: 0;
+  color: var(--text-base);
+}
+
+.context-compaction-card .markdown-shell {
+  color: var(--text-base);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-large);
+}
+
+.context-compaction-card .markdown-shell > :first-child {
+  margin-top: 0;
+}
+
+.context-compaction-card .markdown-shell > :last-child {
+  margin-bottom: 0;
 }
 
 /* ── Approval card ─────────────────────────────── */
