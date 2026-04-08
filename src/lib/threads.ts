@@ -19,7 +19,19 @@ export function normalizeStringArray(value: unknown): string[] {
     return [];
   }
 
-  return value.map((entry) => (typeof entry === "string" ? entry : ""));
+  return value
+    .map((entry) => {
+      if (typeof entry === "string") {
+        return entry;
+      }
+
+      if (isRecord(entry) && typeof entry.text === "string") {
+        return entry.text;
+      }
+
+      return "";
+    })
+    .filter((entry) => entry.length > 0);
 }
 
 export function renderUserInputs(value: unknown): string {
@@ -72,11 +84,23 @@ export function extractFileChangePaths(item: ThreadItem | undefined): string[] {
 
   return item.changes
     .map((change) => {
-      if (isRecord(change) && typeof change.path === "string" && typeof change.kind === "string") {
-        return `${change.kind}: ${change.path}`;
+      if (!isRecord(change) || typeof change.path !== "string") {
+        return null;
       }
 
-      return null;
+      if (typeof change.kind === "string") {
+        return change.kind === "update" ? change.path : `${change.kind}: ${change.path}`;
+      }
+
+      if (isRecord(change.kind) && typeof change.kind.type === "string") {
+        if (change.kind.type === "move" && typeof change.kind.move_path === "string" && change.kind.move_path.length > 0) {
+          return `${change.path} -> ${change.kind.move_path}`;
+        }
+
+        return change.kind.type === "update" ? change.path : `${change.kind.type}: ${change.path}`;
+      }
+
+      return change.path;
     })
     .filter((entry): entry is string => Boolean(entry));
 }

@@ -1298,6 +1298,65 @@ button {
   gap: 8px;
 }
 
+.item-disclosure {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.item-reasoning .item-disclosure,
+.item-fileChange .item-disclosure {
+  gap: 0;
+}
+
+.item-disclosure-summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  user-select: none;
+}
+
+.item-disclosure-summary::-webkit-details-marker {
+  display: none;
+}
+
+.item-disclosure-summary::before {
+  content: "▸";
+  font-size: 10px;
+  color: var(--text-weaker);
+  transition: transform 0.15s ease;
+}
+
+.item-disclosure[open] > .item-disclosure-summary::before {
+  transform: rotate(90deg);
+}
+
+.item-disclosure-preview {
+  color: var(--text-base);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-large);
+}
+
+.item-disclosure-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.turn-items > .item-commandExecution + .item-commandExecution,
+.turn-items > .item-commandExecution + .item-fileChange,
+.turn-items > .item-commandExecution + .item-reasoning,
+.turn-items > .item-fileChange + .item-commandExecution,
+.turn-items > .item-fileChange + .item-fileChange,
+.turn-items > .item-fileChange + .item-reasoning,
+.turn-items > .item-reasoning + .item-commandExecution,
+.turn-items > .item-reasoning + .item-fileChange,
+.turn-items > .item-reasoning + .item-reasoning {
+  margin-top: -10px;
+}
+
 .turn-content {
   display: flex;
   flex-direction: column;
@@ -1724,13 +1783,6 @@ button {
   font-size: var(--font-size-base);
 }
 
-.reasoning-block details summary {
-  cursor: default;
-  color: var(--text-weak);
-  font-size: var(--font-size-sm);
-  margin-top: 4px;
-}
-
 /* ── Collapsible blocks ───────────────────────── */
 .collapsible-block {
   margin: 0;
@@ -1761,6 +1813,20 @@ button {
 
 details[open] > .collapsible-summary::before {
   transform: rotate(90deg);
+}
+
+.collapsible-summary-body {
+  color: var(--text-base);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-large);
+}
+
+.collapsible-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
 }
 
 .collapsible-command {

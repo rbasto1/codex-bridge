@@ -21,29 +21,21 @@ export function TranscriptItemBody(props: TranscriptItemBodyProps) {
     case "reasoning": {
       const summaryLines = normalizeStringArray(item.summary);
       const contentLines = normalizeStringArray(item.content);
-      const firstLine = summaryLines[0] || contentLines[0] || "";
-      const hasMore = summaryLines.length > 1 || contentLines.length > 0;
       return (
         <div className="reasoning-block">
-          {firstLine ? <p className="reasoning-first-line">{firstLine}</p> : null}
-          {hasMore ? (
-            <details className="collapsible-block">
-              <summary className="collapsible-summary">more reasoning</summary>
-              {summaryLines.length > 1 ? (
-                <ul className="reasoning-summary">
-                  {summaryLines.slice(1).map((entry) => (
-                    <li key={`${item.id}-summary-${entry}`}>{entry}</li>
-                  ))}
-                </ul>
-              ) : null}
-              {contentLines.length > 0 ? (
-                <div className="markdown-shell">
-                  {contentLines.map((entry) => (
-                    <p key={`${item.id}-content-${entry}`}>{entry}</p>
-                  ))}
-                </div>
-              ) : null}
-            </details>
+          {summaryLines.length > 0 ? (
+            <ul className="reasoning-summary">
+              {summaryLines.map((entry) => (
+                <li key={`${item.id}-summary-${entry}`}>{entry}</li>
+              ))}
+            </ul>
+          ) : null}
+          {contentLines.length > 0 ? (
+            <div className="markdown-shell">
+              {contentLines.map((entry) => (
+                <p key={`${item.id}-content-${entry}`}>{entry}</p>
+              ))}
+            </div>
           ) : null}
         </div>
       );
@@ -62,6 +54,8 @@ export function TranscriptItemBody(props: TranscriptItemBodyProps) {
       );
     case "filechange": {
       const paths = extractFileChangePaths(item);
+      const summaryText = asString(item.summaryText);
+
       return (
         <div className="tool-block">
           {paths.length > 0 ? (
@@ -71,7 +65,7 @@ export function TranscriptItemBody(props: TranscriptItemBodyProps) {
               ))}
             </ul>
           ) : null}
-          {asString(item.summaryText) ? <pre className="plain-block">{asString(item.summaryText)}</pre> : null}
+          {paths.length === 0 && summaryText ? <pre className="plain-block">{summaryText}</pre> : null}
         </div>
       );
     }
