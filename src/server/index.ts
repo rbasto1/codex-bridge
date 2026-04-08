@@ -3,13 +3,23 @@ import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 
 import express, { type Request, type Response } from "express";
 import { WebSocket, WebSocketServer } from "ws";
 
 import { CodexAppServerBridge, RpcResponseError } from "./codexAppServer.js";
 import { AUTH_COOKIE_NAME, AUTH_QUERY_PARAM } from "../shared/auth.js";
-import { isRecord, type RequestId, type RpcError, type Thread, type ThreadItem, type Turn } from "../shared/codex.js";
+import {
+  createTextInput,
+  isRecord,
+  type RequestId,
+  type RpcError,
+  type Thread,
+  type ThreadItem,
+  type Turn,
+  type UserInput,
+} from "../shared/codex.js";
 
 const PORT = Number(process.env.SERVER_PORT ?? process.env.PORT ?? 4095);
 const AUTH_DISABLED = ["1", "true"].includes((process.env.AUTH_DISABLED ?? "").trim().toLowerCase());
@@ -429,6 +439,303 @@ function listDirectorySuggestions(input: string): string[] {
   }
 }
 
+type SkillInfo = {
+  name: string;
+  description: string;
+  path: string;
+};
+
+function resolveComposerCwd(input: unknown): string {
+  if (typeof input !== "string" || input.trim().length === 0) {
+    return process.cwd();
+  }
+
+  if (path.isAbsolute(input)) {
+    return input;
+  }
+
+  return path.resolve(process.cwd(), input);
+}
+
+function normalizeComposerQuery(input: unknown): string {
+  return typeof input === "string" ? input.trim() : "";
+}
+
+function listAncestorDirectories(startDir: string): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  let current = path.resolve(startDir);
+
+  while (!seen.has(current)) {
+    result.push(current);
+    seen.add(current);
+    const parent = path.dirname(current);
+    if (parent === current) {
+      break;
+    }
+    current = parent;
+  }
+
+  return result;
+}
+
+function scoreComposerMatch(candidate: string, query: string): number {
+  if (!query) {
+    return 0;
+  }
+
+  const normalizedCandidate = candidate.toLowerCase();
+  const normalizedQuery = query.toLowerCase();
+  const basename = path.basename(candidate).toLowerCase();
+
+  if (basename === normalizedQuery) {
+    return 100;
+  }
+
+  if (basename.startsWith(normalizedQuery)) {
+    return 80;
+  }
+
+  if (normalizedCandidate.startsWith(normalizedQuery)) {
+    return 60;
+  }
+
+  const segmentIndex = normalizedCandidate.indexOf(`/${normalizedQuery}`);
+  if (segmentIndex >= 0) {
+    return 40 - Math.min(segmentIndex, 20);
+  }
+
+  const includesIndex = normalizedCandidate.indexOf(normalizedQuery);
+  if (includesIndex >= 0) {
+    return 20 - Math.min(includesIndex, 10);
+  }
+
+  return -1;
+}
+
+function listWorkspaceFiles(cwd: string): string[] {
+  try {
+    const output = execFileSync(
+      "rg",
+      [
+        "--files",
+        "--hidden",
+        "-g",
+        "!.git",
+        "-g",
+        "!node_modules",
+        "-g",
+        "!dist",
+        "-g",
+        "!build",
+      ],
+      {
+        cwd,
+        encoding: "utf8",
+        maxBuffer: 8 * 1024 * 1024,
+      },
+    );
+
+    return output
+      .split(/\r?\n/)
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function listComposerMentionSuggestions(cwd: string, query: string): Array<{ name: string; path: string }> {
+  return listWorkspaceFiles(cwd)
+    .map((relativePath) => ({
+      name: relativePath,
+      path: path.resolve(cwd, relativePath),
+      score: scoreComposerMatch(relativePath, query),
+    }))
+    .filter((entry) => query.length === 0 || entry.score >= 0)
+    .sort((left, right) => {
+      if (left.score !== right.score) {
+        return right.score - left.score;
+      }
+      return left.name.localeCompare(right.name);
+    })
+    .slice(0, 20)
+    .map(({ name, path: resolvedPath }) => ({
+      name,
+      path: resolvedPath,
+    }));
+}
+
+function parseSkillFrontmatter(filePath: string): SkillInfo | null {
+  let content = "";
+  try {
+    content = readFileSync(filePath, "utf8");
+  } catch {
+    return null;
+  }
+
+  const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!frontmatterMatch) {
+    return null;
+  }
+
+  const frontmatter = frontmatterMatch[1];
+  const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
+  const descriptionMatch = frontmatter.match(/^description:\s*(.+)$/m);
+  const name = nameMatch?.[1]?.trim().replace(/^["']|["']$/g, "");
+
+  if (!name) {
+    return null;
+  }
+
+  let description = descriptionMatch?.[1]?.trim() ?? "";
+  if (description === ">" || description === "|" || description === ">-" || description === "|-") {
+    description = "";
+  }
+
+  return {
+    name,
+    description: description.replace(/^["']|["']$/g, ""),
+    path: filePath,
+  };
+}
+
+function listSkillRoots(cwd: string): string[] {
+  const home = process.env.HOME ?? "";
+  const roots = new Set<string>();
+  const addIfDir = (entry: string) => {
+    if (!entry) {
+      return;
+    }
+    try {
+      if (statSync(entry).isDirectory()) {
+        roots.add(entry);
+      }
+    } catch {
+      // Ignore missing roots.
+    }
+  };
+
+  for (const ancestor of listAncestorDirectories(cwd)) {
+    addIfDir(path.join(ancestor, ".codex", "skills"));
+    addIfDir(path.join(ancestor, ".codex", "skill"));
+    addIfDir(path.join(ancestor, ".agents", "skills"));
+    addIfDir(path.join(ancestor, ".claude", "skills"));
+  }
+
+  addIfDir(path.join(home, ".codex", "skills"));
+  addIfDir(path.join(home, ".codex", "skill"));
+  addIfDir(path.join(home, ".config", "codex", "skills"));
+  addIfDir(path.join(home, ".agents", "skills"));
+  addIfDir(path.join(home, ".claude", "skills"));
+
+  return [...roots];
+}
+
+function collectSkillsFromRoot(root: string): SkillInfo[] {
+  try {
+    return readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => parseSkillFrontmatter(path.join(root, entry.name, "SKILL.md")))
+      .filter((entry): entry is SkillInfo => Boolean(entry));
+  } catch {
+    return [];
+  }
+}
+
+function listComposerSkills(cwd: string, query: string): SkillInfo[] {
+  const byName = new Map<string, SkillInfo>();
+
+  for (const root of listSkillRoots(cwd)) {
+    for (const skill of collectSkillsFromRoot(root)) {
+      if (!byName.has(skill.name)) {
+        byName.set(skill.name, skill);
+      }
+    }
+  }
+
+  return [...byName.values()]
+    .map((skill) => ({
+      ...skill,
+      score: scoreComposerMatch(skill.name, query),
+    }))
+    .filter((entry) => query.length === 0 || entry.score >= 0)
+    .sort((left, right) => {
+      if (left.score !== right.score) {
+        return right.score - left.score;
+      }
+      return left.name.localeCompare(right.name);
+    })
+    .slice(0, 20)
+    .map(({ score: _score, ...skill }) => skill);
+}
+
+function resolveMentionToken(token: string, cwd: string): UserInput | null {
+  const normalizedToken = token.replace(/[.,!?;:)\]}]+$/g, "");
+  const expanded = normalizedToken.startsWith("~/")
+    ? path.join(process.env.HOME ?? "", normalizedToken.slice(2))
+    : normalizedToken;
+  const resolvedPath = path.isAbsolute(expanded) ? expanded : path.resolve(cwd, expanded);
+
+  try {
+    if (!statSync(resolvedPath).isFile()) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+
+  const relativePath = path.relative(cwd, resolvedPath);
+
+  return {
+    type: "mention",
+    name: relativePath && !relativePath.startsWith("..") ? relativePath : normalizedToken,
+    path: resolvedPath,
+  };
+}
+
+function resolveSkillToken(token: string, cwd: string): UserInput | null {
+  const normalizedToken = token.replace(/[.,!?;:)\]}]+$/g, "");
+  const skill = listComposerSkills(cwd, normalizedToken).find((entry) => entry.name === normalizedToken);
+  if (!skill) {
+    return null;
+  }
+
+  return {
+    type: "skill",
+    name: skill.name,
+    path: skill.path,
+  };
+}
+
+function resolveComposerInputs(cwd: string, text: string): UserInput[] {
+  const matches = [...text.matchAll(/(^|\s)([@$])([^\s@$]+)/g)];
+  const resolvedInputs: UserInput[] = [];
+  let normalizedText = text;
+
+  for (const match of matches) {
+    const marker = match[2];
+    const token = match[3];
+    if (!token) {
+      continue;
+    }
+
+    const resolved = marker === "@"
+      ? resolveMentionToken(token, cwd)
+      : resolveSkillToken(token, cwd);
+
+    if (!resolved) {
+      continue;
+    }
+
+    resolvedInputs.push(resolved);
+    normalizedText = normalizedText.replace(`${marker}${token}`, "").replace(/[ \t]{2,}/g, " ");
+  }
+
+  const trimmedText = normalizedText.replace(/\s+\n/g, "\n").replace(/\n\s+/g, "\n").trim();
+  return trimmedText ? [createTextInput(trimmedText), ...resolvedInputs] : resolvedInputs;
+}
+
 app.get("/api/projects/state", (_request, response) => {
   ensureCodexDir();
   const filePath = path.join(CODEX_DIR, "state.json");
@@ -478,6 +785,29 @@ app.get("/api/projects/path-complete", (request, response) => {
   const { exists, isDirectory } = getPathStatus(resolvedPath);
   const suggestions = listDirectorySuggestions(input);
   response.json({ resolvedPath, exists, isDirectory, suggestions });
+});
+
+app.get("/api/composer/mentions", (request, response) => {
+  const cwd = resolveComposerCwd(request.query.cwd);
+  const query = normalizeComposerQuery(request.query.query);
+  response.json(listComposerMentionSuggestions(cwd, query));
+});
+
+app.get("/api/composer/skills", (request, response) => {
+  const cwd = resolveComposerCwd(request.query.cwd);
+  const query = normalizeComposerQuery(request.query.query);
+  response.json(listComposerSkills(cwd, query));
+});
+
+app.post("/api/composer/resolve", (request, response) => {
+  if (!isRecord(request.body) || typeof request.body.cwd !== "string" || typeof request.body.text !== "string") {
+    response.status(400).json({ error: { code: -32000, message: "cwd and text are required." } });
+    return;
+  }
+
+  response.json({
+    input: resolveComposerInputs(resolveComposerCwd(request.body.cwd), request.body.text),
+  });
 });
 
 app.post("/api/projects/folder", (request, response) => {

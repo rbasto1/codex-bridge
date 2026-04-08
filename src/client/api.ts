@@ -12,6 +12,9 @@ import {
   type Turn,
 } from "../shared/codex.js";
 import type {
+  ComposerMentionSuggestion,
+  ComposerResolveResponse,
+  ComposerSkillSuggestion,
   ModelListResponse,
   ModelOption,
   ProjectPathCompletionResponse,
@@ -248,6 +251,34 @@ export async function createProjectFolder(input: string): Promise<{ path: string
   return requestJson<{ path: string }>("/api/projects/folder", {
     method: "POST",
     body: JSON.stringify({ path: input }),
+  });
+}
+
+export async function fetchComposerMentionSuggestions(
+  cwd: string,
+  query: string,
+): Promise<ComposerMentionSuggestion[]> {
+  return requestJson<ComposerMentionSuggestion[]>(
+    `/api/composer/mentions?cwd=${encodeURIComponent(cwd)}&query=${encodeURIComponent(query)}`,
+  );
+}
+
+export async function fetchComposerSkillSuggestions(
+  cwd: string,
+  query: string,
+): Promise<ComposerSkillSuggestion[]> {
+  return requestJson<ComposerSkillSuggestion[]>(
+    `/api/composer/skills?cwd=${encodeURIComponent(cwd)}&query=${encodeURIComponent(query)}`,
+  );
+}
+
+export async function resolveComposerInputs(
+  cwd: string,
+  text: string,
+): Promise<ComposerResolveResponse> {
+  return requestJson<ComposerResolveResponse>("/api/composer/resolve", {
+    method: "POST",
+    body: JSON.stringify({ cwd, text }),
   });
 }
 

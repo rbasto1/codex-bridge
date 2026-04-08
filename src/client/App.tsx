@@ -7,6 +7,7 @@ import {
   interruptTurn,
   readThread,
   renameThread,
+  resolveComposerInputs,
   respondToServerRequest,
   rollbackThread,
   restartServer,
@@ -20,7 +21,6 @@ import { useAppStore } from "./store";
 import { syncAttentionFavicon } from "./favicon";
 import { AuthModal } from "../components/AuthModal";
 import {
-  createTextInput,
   type BrowserServerRequest,
   type Thread,
   type ThreadSessionConfig,
@@ -536,10 +536,13 @@ export default function App() {
         }
       }
 
+      const resolvedInput = await resolveComposerInputs(currentThread.cwd, text);
+      const turnInput = resolvedInput.input;
+
       if (activeTurnId && !isUiDraft) {
-        await steerTurn(targetThreadId, activeTurnId, [createTextInput(text)]);
+        await steerTurn(targetThreadId, activeTurnId, turnInput);
       } else {
-        const response = await startTurn(targetThreadId, [createTextInput(text)], {
+        const response = await startTurn(targetThreadId, turnInput, {
           approvalPolicy: nextThreadSessionConfig.approvalPolicy,
           sandboxPolicy: nextThreadSessionConfig.sandbox,
           collaborationMode: {

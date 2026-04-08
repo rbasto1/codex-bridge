@@ -7,6 +7,7 @@
   /* Typography */
   --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --font-size-xs: 12px;
   --font-size-sm: 13px;
   --font-size-base: 14px;
   --font-size-lg: 16px;
@@ -1897,6 +1898,61 @@ details[open] > .collapsible-summary::before {
 
 .composer-input-shell {
   position: relative;
+}
+
+.composer-suggestions {
+  position: absolute;
+  left: 0;
+  right: 48px;
+  bottom: calc(100% + 8px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  padding: 6px;
+  overflow-y: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface-raised-stronger);
+  box-shadow: var(--shadow-border);
+  z-index: 20;
+}
+
+.composer-suggestion {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-strong);
+  text-align: left;
+}
+
+.composer-suggestion:hover,
+.composer-suggestion.active {
+  background: var(--surface-raised-hover);
+}
+
+.composer-suggestion-label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-strong);
+}
+
+.composer-suggestion-detail,
+.composer-suggestion-empty {
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+  color: var(--text-base);
+}
+
+.composer-suggestion-empty {
+  padding: 8px 10px;
 }
 
 .composer-control-row {

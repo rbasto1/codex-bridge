@@ -13,6 +13,7 @@ import type {
   Thread,
   ThreadItem,
   ThreadSessionConfig,
+  UserInput,
   Turn,
   TurnStatus,
 } from "./shared/codex.js";
@@ -153,6 +154,21 @@ export interface ProjectPathCompletionResponse {
   exists: boolean;
   isDirectory: boolean;
   suggestions: string[];
+}
+
+export interface ComposerMentionSuggestion {
+  name: string;
+  path: string;
+}
+
+export interface ComposerSkillSuggestion {
+  name: string;
+  description: string;
+  path: string;
+}
+
+export interface ComposerResolveResponse {
+  input: UserInput[];
 }
 
 export interface ProjectSessionStateResponse {

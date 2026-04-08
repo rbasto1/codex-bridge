@@ -62,7 +62,7 @@ export function renderUserInput(input: UserInput): string {
     return `@${input.name} (${input.path})`;
   }
 
-  return `/${input.name} (${input.path})`;
+  return `$${input.name} (${input.path})`;
 }
 
 export function buildTurnAgentCopyText(items: ThreadItem[], status: TurnStatus | undefined): string {
