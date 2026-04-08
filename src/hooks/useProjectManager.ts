@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import {
   deleteProjectIcon,
@@ -32,6 +32,20 @@ function isHexColor(value: string): boolean {
   return /^#[0-9a-fA-F]{6}$/.test(value);
 }
 
+function resolveRestoredProject(
+  initialUi: UseProjectManagerOptions["initialUi"],
+  threadsById: UseProjectManagerOptions["threadsById"],
+): string {
+  const hashThreadId = window.location.hash.replace(/^#/, "") || null;
+  const restoreThreadId = (hashThreadId && threadsById[hashThreadId]) ? hashThreadId : initialUi.activeThreadId;
+  return restoreThreadId ? threadsById[restoreThreadId]?.cwd?.trim() ?? "" : "";
+}
+
+function hasRequestedRestoredThread(initialUi: UseProjectManagerOptions["initialUi"]): boolean {
+  const hashThreadId = window.location.hash.replace(/^#/, "") || null;
+  return Boolean(hashThreadId || initialUi.activeThreadId);
+}
+
 export function useProjectManager(options: UseProjectManagerOptions) {
   const {
     initialUi,
@@ -42,7 +56,18 @@ export function useProjectManager(options: UseProjectManagerOptions) {
     threadsById,
   } = options;
 
-  const [currentProject, setCurrentProject] = useState(initialUi.currentProject ?? "");
+  const [currentProject, setCurrentProject] = useState(() => {
+    const restoredProject = resolveRestoredProject(initialUi, threadsById);
+    if (restoredProject) {
+      return restoredProject;
+    }
+
+    if (hasRequestedRestoredThread(initialUi)) {
+      return "";
+    }
+
+    return initialUi.currentProject || "";
+  });
   const [customProjects, setCustomProjects] = useState<string[]>(initialUi.customProjects ?? []);
   const [envHome, setEnvHome] = useState("");
   const [hiddenProjects, setHiddenProjects] = useState<string[]>([]);
@@ -50,6 +75,7 @@ export function useProjectManager(options: UseProjectManagerOptions) {
   const [projectState, setProjectState] = useState<ProjectStateEntry[]>([]);
   const [projectTags, setProjectTags] = useState<TagDefinition[]>([DONE_TAG]);
   const [projectSessionStates, setProjectSessionStates] = useState<Record<string, ProjectSessionStateSaveData>>({});
+  const initialProjectResolvedRef = useRef(false);
 
   const projectOptions = Array.from(
     new Set(
@@ -138,8 +164,41 @@ export function useProjectManager(options: UseProjectManagerOptions) {
     };
   }, [currentProject, projectSessionStates]);
 
+  useLayoutEffect(() => {
+    if (initialProjectResolvedRef.current) {
+      return;
+    }
+
+    const hasRestoreRequest = hasRequestedRestoredThread(initialUi);
+    if (hasRestoreRequest && threadOrder.length === 0) {
+      return;
+    }
+
+    const restoredProject = resolveRestoredProject(initialUi, threadsById);
+    if (restoredProject) {
+      initialProjectResolvedRef.current = true;
+      if (currentProject !== restoredProject) {
+        setCurrentProject(restoredProject);
+      }
+      return;
+    }
+
+    if (!hasRestoreRequest && threadOrder.length === 0 && projectOptions.length === 0) {
+      return;
+    }
+
+    initialProjectResolvedRef.current = true;
+    if (currentProject && projectOptions.includes(currentProject)) {
+      return;
+    }
+
+    if (projectOptions[0]) {
+      setCurrentProject(projectOptions[0]);
+    }
+  }, [currentProject, initialUi, projectOptions, threadOrder.length, threadsById]);
+
   useEffect(() => {
-    if (projectOptions.length === 0) {
+    if (!initialProjectResolvedRef.current || projectOptions.length === 0) {
       return;
     }
 

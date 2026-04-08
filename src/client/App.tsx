@@ -218,7 +218,7 @@ export default function App() {
     threadsById,
   });
 
-  const { listLoading } = useBackendInitialization({
+  const { listLoading, threadsInitialized } = useBackendInitialization({
     backendStatus,
     enabled: authBootstrapped && !authBlocked,
     replaceThreads,
@@ -271,22 +271,43 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if (selectionRestoredRef.current || threadOrder.length === 0) {
+    if (selectionRestoredRef.current) {
+      return;
+    }
+
+    const hashThreadId = window.location.hash.replace(/^#/, "") || null;
+    const requestedThreadId = hashThreadId || initialUi.activeThreadId || null;
+    if (!requestedThreadId) {
+      if (threadOrder.length > 0) {
+        selectionRestoredRef.current = true;
+      }
+      return;
+    }
+
+    if (!threadsById[requestedThreadId]) {
+      if (!threadsInitialized) {
+        return;
+      }
+
+      selectionRestoredRef.current = true;
       return;
     }
 
     selectionRestoredRef.current = true;
 
-    const hashThreadId = window.location.hash.replace(/^#/, "") || null;
-    const restoreThreadId = (hashThreadId && threadsById[hashThreadId]) ? hashThreadId : initialUi.activeThreadId;
-
-    if (restoreThreadId && threadsById[restoreThreadId]) {
-      const mode: ThreadMode = hashThreadId && hashThreadId === restoreThreadId
+    if (threadsById[requestedThreadId]) {
+      const mode: ThreadMode = hashThreadId && hashThreadId === requestedThreadId
         ? "live"
         : (initialUi.activeMode ?? "replay");
-      void openThreadRef.current?.(restoreThreadId, mode);
+      void openThreadRef.current?.(requestedThreadId, mode);
     }
-  }, [initialUi.activeMode, initialUi.activeThreadId, threadOrder.length, threadsById]);
+  }, [
+    initialUi.activeMode,
+    initialUi.activeThreadId,
+    threadOrder.length,
+    threadsInitialized,
+    threadsById,
+  ]);
 
   async function handleStartThread() {
     const cwd = projectManager.currentProject.trim();

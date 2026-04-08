@@ -9,10 +9,12 @@ import type { UseBackendInitializationOptions } from "../types";
 export function useBackendInitialization(options: UseBackendInitializationOptions) {
   const { backendStatus, enabled, replaceThreads, setActionError, setSnapshot } = options;
   const [listLoading, setListLoading] = useState(false);
+  const [threadsInitialized, setThreadsInitialized] = useState(false);
 
   useEffect(() => {
     if (!enabled) {
       setListLoading(false);
+      setThreadsInitialized(false);
     }
   }, [enabled]);
 
@@ -105,6 +107,7 @@ export function useBackendInitialization(options: UseBackendInitializationOption
     let cancelled = false;
 
     void (async () => {
+      setThreadsInitialized(false);
       setListLoading(true);
       try {
         const threads = await listAllThreads();
@@ -120,6 +123,7 @@ export function useBackendInitialization(options: UseBackendInitializationOption
       } finally {
         if (!cancelled) {
           setListLoading(false);
+          setThreadsInitialized(true);
         }
       }
     })();
@@ -131,5 +135,6 @@ export function useBackendInitialization(options: UseBackendInitializationOption
 
   return {
     listLoading,
+    threadsInitialized,
   };
 }
