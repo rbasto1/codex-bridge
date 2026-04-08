@@ -89,6 +89,8 @@ export interface ThreadSessionResponse extends ThreadResponse, ThreadSessionConf
 
 export type ThreadStartResponse = ThreadSessionResponse;
 export type ThreadResumeResponse = ThreadSessionResponse;
+export type ThreadForkResponse = ThreadSessionResponse;
+export type ThreadRollbackResponse = ThreadResponse;
 
 export interface TurnStartResponse {
   turn: Turn;

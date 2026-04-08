@@ -21,7 +21,9 @@ import type {
   ProjectStateSaveData,
   ServerRequestResponsePayload,
   ThreadListResponse,
+  ThreadRollbackResponse,
   ThreadResponse,
+  ThreadForkResponse,
   ThreadResumeResponse,
   ThreadSessionResponse,
   ThreadStartResponse,
@@ -116,6 +118,26 @@ export async function resumeThread(threadId: string): Promise<ThreadResumeRespon
     method: "POST",
     body: JSON.stringify({
       threadId,
+    }),
+  });
+}
+
+export async function forkThread(threadId: string, path?: string | null): Promise<ThreadForkResponse> {
+  return requestJson<ThreadForkResponse>("/api/thread/fork", {
+    method: "POST",
+    body: JSON.stringify({
+      threadId,
+      ...(path ? { path } : {}),
+    }),
+  });
+}
+
+export async function rollbackThread(threadId: string, numTurns: number): Promise<ThreadRollbackResponse> {
+  return requestJson<ThreadRollbackResponse>("/api/thread/rollback", {
+    method: "POST",
+    body: JSON.stringify({
+      threadId,
+      numTurns,
     }),
   });
 }

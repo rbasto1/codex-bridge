@@ -17,6 +17,8 @@ const AUTH_TOKEN = AUTH_DISABLED ? null : resolveAuthToken();
 const RPC_METHODS = [
   "thread/start",
   "thread/resume",
+  "thread/fork",
+  "thread/rollback",
   "thread/read",
   "thread/list",
   "thread/name/set",
@@ -612,7 +614,10 @@ function augmentRpcResult(method: string, result: unknown): unknown {
     return result;
   }
 
-  if ((method === "thread/read" || method === "thread/resume") && isRecord(result.thread)) {
+  if (
+    (method === "thread/read" || method === "thread/resume" || method === "thread/fork" || method === "thread/rollback")
+    && isRecord(result.thread)
+  ) {
     return {
       ...result,
       thread: injectPlanItems(result.thread as Thread),

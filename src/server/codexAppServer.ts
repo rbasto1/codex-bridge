@@ -255,6 +255,13 @@ export class CodexAppServerBridge {
       };
     }
 
+    if (method === "thread/fork") {
+      return {
+        persistExtendedHistory: true,
+        ...next,
+      };
+    }
+
     return next;
   }
 

@@ -2,11 +2,13 @@ import { startTransition, useCallback, useEffect, useRef, useState } from "react
 import { useShallow } from "zustand/react/shallow";
 
 import {
+  forkThread,
   generateThreadName,
   interruptTurn,
   readThread,
   renameThread,
   respondToServerRequest,
+  rollbackThread,
   restartServer,
   resumeThread,
   startThread,
@@ -19,6 +21,7 @@ import { AuthModal } from "../components/AuthModal";
 import {
   createTextInput,
   type BrowserServerRequest,
+  type Thread,
   type ThreadSessionConfig,
 } from "../shared/codex.js";
 import { ProjectSidebar } from "../components/ProjectSidebar";
@@ -40,7 +43,7 @@ import {
 } from "../lib/composer";
 import { getErrorMessage, looksNonSteerable } from "../lib/errors";
 import { writePersistedUi } from "../lib/storage";
-import { createUiDraftThread, createUiForkThread, isUiOnlyThread, renderUserInputs } from "../lib/threads";
+import { createUiDraftThread, isUiOnlyThread, renderUserInputs } from "../lib/threads";
 import type { RequestResponseBody, ThreadMode } from "../types";
 
 export default function App() {
@@ -353,7 +356,7 @@ export default function App() {
     }
   }
 
-  function handleForkMessage(threadId: string, turnId: string, itemId: string) {
+  async function handleForkMessage(threadId: string, turnId: string, itemId: string) {
     const state = useAppStore.getState();
     const sourceThread = state.threadsById[threadId];
     const sourceItem = state.itemsById[itemId];
@@ -365,31 +368,29 @@ export default function App() {
       return;
     }
 
-    const forkedTurns = turnOrder.slice(0, selectedTurnIndex).map((sourceTurnId) => {
-      const sourceTurn = state.turnsById[sourceTurnId];
-      const itemIds = state.itemOrderByTurnId[sourceTurnId] ?? [];
-
-      return {
-        ...(sourceTurn ?? { id: sourceTurnId, status: "completed" as const, error: null }),
-        items: itemIds
-          .map((sourceItemId) => state.itemsById[sourceItemId])
-          .filter(Boolean)
-          .map((item) => ({ ...item })),
-      };
-    });
-    const forkedThread = createUiForkThread(sourceThread, forkedTurns);
-    const sourceSessionConfig = state.threadSessionConfigById[threadId] ?? null;
-
     setActionError(null);
     setSelectedThreadError(null);
 
-    composer.copyScopedState(threadId, forkedThread.id);
-    composer.setComposerDraft(forkedThread.id, draftText);
-    startTransition(() => {
-      hydrateThread(forkedThread, "replay", sourceSessionConfig);
-    });
-    composer.focusComposer();
-    window.history.replaceState(null, "", window.location.pathname);
+    try {
+      const forkResponse = await forkThread(threadId, isUiOnlyThread(sourceThread) ? sourceThread.path : undefined);
+      const turnsToDrop = Math.max(0, turnOrder.length - selectedTurnIndex);
+      const threadResponse = turnsToDrop > 0
+        ? await rollbackThread(forkResponse.thread.id, turnsToDrop)
+        : { thread: forkResponse.thread };
+      const hydratedForkThread = normalizeForkedThread(threadResponse.thread);
+
+      composer.copyScopedState(threadId, forkResponse.thread.id);
+      composer.setComposerDraft(forkResponse.thread.id, draftText);
+      startTransition(() => {
+        hydrateThread(hydratedForkThread, "live", extractThreadSessionConfig(forkResponse));
+      });
+      composer.focusComposer();
+      window.history.replaceState(null, "", `#${forkResponse.thread.id}`);
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setSelectedThreadError(message);
+      setActionError(message);
+    }
   }
 
   async function handleSubmitComposer() {
@@ -415,6 +416,7 @@ export default function App() {
       permissionBaseline,
       findModelOption(composer.availableModels, composer.composerControlDraft.model),
     );
+    const canHydrateFromForkDraft = isUiDraft && Boolean(currentThread.path) && currentThread.turns.length > 0;
     let targetThreadId = activeThreadId;
 
     composer.setComposerBusy(true);
@@ -422,13 +424,22 @@ export default function App() {
 
     try {
       if (isUiDraft) {
-        const response = await startThread(currentThread.cwd);
+        const response = canHydrateFromForkDraft
+          ? await forkThread(draftThreadId, currentThread.path)
+          : await startThread(currentThread.cwd);
         targetThreadId = response.thread.id;
+        const turnsToDrop = canHydrateFromForkDraft
+          ? Math.max(0, response.thread.turns.length - currentThread.turns.length)
+          : 0;
+        const hydratedThread = turnsToDrop > 0
+          ? (await rollbackThread(targetThreadId, turnsToDrop)).thread
+          : response.thread;
+        const normalizedHydratedThread = canHydrateFromForkDraft ? normalizeForkedThread(hydratedThread) : hydratedThread;
 
         composer.moveScopedState(draftThreadId, targetThreadId);
 
         startTransition(() => {
-          hydrateThread(response.thread, "live", extractThreadSessionConfig(response));
+          hydrateThread(normalizedHydratedThread, "live", extractThreadSessionConfig(response));
           if (draftThreadName) {
             updateThreadName(targetThreadId, draftThreadName);
           }
@@ -504,6 +515,18 @@ export default function App() {
     } catch (error) {
       setActionError(getErrorMessage(error));
     }
+  }
+
+  function normalizeForkedThread(thread: Thread): Thread {
+    return {
+      ...thread,
+      status: { type: "idle" },
+      turns: thread.turns.map((turn) => (
+        turn.status === "inProgress"
+          ? { ...turn, status: "completed" }
+          : turn
+      )),
+    };
   }
 
   function handleDeleteDraft() {
