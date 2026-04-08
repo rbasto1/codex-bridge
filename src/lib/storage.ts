@@ -84,6 +84,7 @@ function writeComposerDrafts(drafts: Record<string, string>): void {
 function sanitizePersistedUi(value: PersistedUi): PersistedUi {
   const threadControlDrafts = readThreadControlDrafts(value.threadControlDrafts);
   const threadPermissionBaselines = value.threadPermissionBaselines ?? {};
+  const threadLastViewedAt = readNumberRecord(value.threadLastViewedAt);
   const sendHotkey = readSendHotkey(value.sendHotkey);
   const now = Date.now();
 
@@ -95,6 +96,7 @@ function sanitizePersistedUi(value: PersistedUi): PersistedUi {
   return {
     ...value,
     sendHotkey,
+    threadLastViewedAt,
     threadControlDrafts: Object.fromEntries(activeThreadIds.map((threadId) => [threadId, threadControlDrafts[threadId]])),
     threadPermissionBaselines: Object.fromEntries(activeThreadIds
       .filter((threadId) => threadPermissionBaselines[threadId] !== undefined)

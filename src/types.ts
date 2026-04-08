@@ -26,6 +26,7 @@ export interface PersistedUi {
   activeMode?: ThreadMode;
   currentProject?: string;
   customProjects?: string[];
+  threadLastViewedAt?: Record<string, number>;
   draftThreads?: Thread[];
   composerDrafts?: Record<string, string>;
   defaultPermissionMode?: "standard" | "full";
@@ -188,6 +189,7 @@ export interface AppStore {
   setActiveThread: (threadId: string | null) => void;
   setSelectedThreadError: (message: string | null) => void;
   clearThreadUnread: (threadId: string) => void;
+  seedUnreadThreads: (threadIds: string[]) => void;
   setThreadSessionConfig: (threadId: string, sessionConfig: ThreadSessionConfig) => void;
   updateThreadName: (threadId: string, name: string | null) => void;
   removeThread: (threadId: string) => void;

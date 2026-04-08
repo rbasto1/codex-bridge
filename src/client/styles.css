@@ -224,6 +224,10 @@ button {
   background: var(--color-interactive);
 }
 
+.project-status-dot.pending {
+  background: var(--color-warning);
+}
+
 .project-status-dot.running {
   background: var(--color-success);
   animation: session-pulse 1.2s ease-in-out infinite;

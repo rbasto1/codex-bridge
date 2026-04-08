@@ -46,6 +46,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
     onToggleThreadDone,
   } = props;
   const unreadThreadIds = useAppStore((state) => state.unreadThreadIds);
+  const pendingServerRequestsById = useAppStore((state) => state.pendingServerRequestsById);
 
   const { isMobileViewport, sidebarCollapsed, setSidebarCollapsed, toggleSidebar } = useSidebarState();
   const [searchTerm, setSearchTerm] = useState("");
@@ -289,6 +290,29 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
     : "";
 
   function getProjectIndicatorState(project: string) {
+    const hasPendingThread = threadOrder.some((threadId) => {
+      const thread = threadsById[threadId];
+      return thread?.cwd === project
+        && thread.status.type === "active"
+        && thread.status.activeFlags.some((flag) => flag === "waitingOnApproval" || flag === "waitingOnUserInput");
+    }) || Object.values(pendingServerRequestsById).some((request) => {
+      if (!request.threadId) {
+        return false;
+      }
+      return threadsById[request.threadId]?.cwd === project;
+    });
+    if (hasPendingThread) {
+      return "pending";
+    }
+
+    const hasUnreadThread = threadOrder.some((threadId) => {
+      const thread = threadsById[threadId];
+      return thread?.cwd === project && Boolean(unreadThreadIds[threadId]);
+    });
+    if (hasUnreadThread) {
+      return "unread";
+    }
+
     const hasRunningThread = threadOrder.some((threadId) => {
       const thread = threadsById[threadId];
       return thread?.cwd === project && thread.status.type === "active";
@@ -296,12 +320,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
     if (hasRunningThread) {
       return "running";
     }
-
-    const hasUnreadThread = threadOrder.some((threadId) => {
-      const thread = threadsById[threadId];
-      return thread?.cwd === project && Boolean(unreadThreadIds[threadId]);
-    });
-    return hasUnreadThread ? "unread" : null;
+    return null;
   }
 
   function getProjectTileData(project: string) {

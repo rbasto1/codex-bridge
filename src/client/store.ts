@@ -159,6 +159,27 @@ export const useAppStore = create<AppStore>((set) => ({
     });
   },
 
+  seedUnreadThreads: (threadIds) => {
+    set((state) => {
+      if (threadIds.length === 0) {
+        return state;
+      }
+
+      const unreadThreadIds = { ...state.unreadThreadIds };
+      let changed = false;
+      for (const threadId of threadIds) {
+        if (threadId === state.activeThreadId || unreadThreadIds[threadId]) {
+          continue;
+        }
+
+        unreadThreadIds[threadId] = true;
+        changed = true;
+      }
+
+      return changed ? { unreadThreadIds } : state;
+    });
+  },
+
   setThreadSessionConfig: (threadId, sessionConfig) => {
     set((state) => ({
       threadSessionConfigById: {
@@ -266,10 +287,7 @@ export const useAppStore = create<AppStore>((set) => ({
       }
 
       const threadId = payload && typeof payload.threadId === "string" ? payload.threadId : null;
-      const isThreadActivity = method.startsWith("turn/") || method.startsWith("item/");
-      if (threadId && isThreadActivity && !state.liveAttachedThreadIds[threadId]) {
-        return state;
-      }
+      const isLiveAttachedThread = Boolean(threadId && state.liveAttachedThreadIds[threadId]);
       const unreadThreadIds = { ...state.unreadThreadIds };
       const shouldMarkUnread = Boolean(
         threadId
@@ -362,6 +380,9 @@ export const useAppStore = create<AppStore>((set) => ({
         }
 
         case "item/agentMessage/delta": {
+          if (!isLiveAttachedThread) {
+            return state;
+          }
           if (!threadId || !payload || typeof payload.turnId !== "string" || typeof payload.itemId !== "string") {
             return state;
           }
@@ -383,6 +404,9 @@ export const useAppStore = create<AppStore>((set) => ({
         }
 
         case "item/plan/delta": {
+          if (!isLiveAttachedThread) {
+            return state;
+          }
           if (!threadId || !payload || typeof payload.turnId !== "string" || typeof payload.itemId !== "string") {
             return state;
           }
@@ -404,6 +428,9 @@ export const useAppStore = create<AppStore>((set) => ({
         }
 
         case "item/commandExecution/outputDelta": {
+          if (!isLiveAttachedThread) {
+            return state;
+          }
           if (!threadId || !payload || typeof payload.turnId !== "string" || typeof payload.itemId !== "string") {
             return state;
           }
@@ -425,6 +452,9 @@ export const useAppStore = create<AppStore>((set) => ({
         }
 
         case "item/fileChange/outputDelta": {
+          if (!isLiveAttachedThread) {
+            return state;
+          }
           if (!threadId || !payload || typeof payload.turnId !== "string" || typeof payload.itemId !== "string") {
             return state;
           }
@@ -446,6 +476,9 @@ export const useAppStore = create<AppStore>((set) => ({
         }
 
         case "item/reasoning/summaryPartAdded": {
+          if (!isLiveAttachedThread) {
+            return state;
+          }
           if (!threadId || !payload || typeof payload.turnId !== "string" || typeof payload.itemId !== "string") {
             return state;
           }
@@ -467,6 +500,9 @@ export const useAppStore = create<AppStore>((set) => ({
         }
 
         case "item/reasoning/summaryTextDelta": {
+          if (!isLiveAttachedThread) {
+            return state;
+          }
           if (!threadId || !payload || typeof payload.turnId !== "string" || typeof payload.itemId !== "string") {
             return state;
           }
@@ -489,6 +525,9 @@ export const useAppStore = create<AppStore>((set) => ({
         }
 
         case "item/reasoning/textDelta": {
+          if (!isLiveAttachedThread) {
+            return state;
+          }
           if (!threadId || !payload || typeof payload.turnId !== "string" || typeof payload.itemId !== "string") {
             return state;
           }

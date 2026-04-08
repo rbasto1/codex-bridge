@@ -17,6 +17,7 @@ import {
 } from "./api";
 import { playSessionCompleteSound } from "./sessionCompleteSound";
 import { useAppStore } from "./store";
+import { syncAttentionFavicon } from "./favicon";
 import { AuthModal } from "../components/AuthModal";
 import {
   createTextInput,
@@ -50,6 +51,7 @@ export default function App() {
   const initialUi = usePersistedUi();
   const hasPersistedUiRef = useRef(false);
   const openThreadRef = useRef<((threadId: string, mode: ThreadMode) => Promise<void>) | null>(null);
+  const [threadLastViewedAt, setThreadLastViewedAt] = useState<Record<string, number>>(initialUi.threadLastViewedAt ?? {});
 
   const {
     activeThreadId,
@@ -77,6 +79,7 @@ export default function App() {
     noteTurn,
     removeThread,
     replaceThreads,
+    seedUnreadThreads,
     setActiveThread,
     setSelectedThreadError,
     setSnapshot,
@@ -89,6 +92,7 @@ export default function App() {
       noteTurn: state.noteTurn,
       removeThread: state.removeThread,
       replaceThreads: state.replaceThreads,
+      seedUnreadThreads: state.seedUnreadThreads,
       setActiveThread: state.setActiveThread,
       setSelectedThreadError: state.setSelectedThreadError,
       setSnapshot: state.setSnapshot,
@@ -116,6 +120,27 @@ export default function App() {
   const isCurrentThreadNonSteerable = useAppStore((state) =>
     state.activeThreadId ? Boolean(state.nonSteerableThreadIds[state.activeThreadId]) : false,
   );
+  const faviconAttentionState = useAppStore((state) => {
+    if (Object.keys(state.pendingServerRequestsById).length > 0) {
+      return "pending" as const;
+    }
+
+    const hasWaitingThread = Object.values(state.threadsById).some((thread) =>
+      thread.status.type === "active"
+      && thread.status.activeFlags.some((flag) => flag === "waitingOnApproval" || flag === "waitingOnUserInput"),
+    );
+    if (hasWaitingThread) {
+      return "pending" as const;
+    }
+
+    const hasUnreadThread = Object.keys(state.unreadThreadIds).length > 0;
+    if (hasUnreadThread) {
+      return "unread" as const;
+    }
+
+    const hasRunningThread = Object.values(state.threadsById).some((thread) => thread.status.type === "active");
+    return hasRunningThread ? "running" as const : "default" as const;
+  });
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [respondingRequestKey, setRespondingRequestKey] = useState<string | null>(null);
@@ -212,6 +237,10 @@ export default function App() {
     });
   }, []);
 
+  useEffect(() => {
+    void syncAttentionFavicon(faviconAttentionState);
+  }, [faviconAttentionState]);
+
   const projectManager = useProjectManager({
     initialUi,
     onOpenThread: openThread,
@@ -244,6 +273,58 @@ export default function App() {
   }, [draftThreadsRestored, initialUi.draftThreads, replaceThreads]);
 
   useEffect(() => {
+    if (!currentThread?.id || typeof currentThread.updatedAt !== "number") {
+      return;
+    }
+
+    setThreadLastViewedAt((previous) => {
+      const nextViewedAt = Math.max(previous[currentThread.id] ?? 0, currentThread.updatedAt);
+      if (nextViewedAt === previous[currentThread.id]) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        [currentThread.id]: nextViewedAt,
+      };
+    });
+  }, [currentThread?.id, currentThread?.updatedAt]);
+
+  useEffect(() => {
+    if (!threadsInitialized) {
+      return;
+    }
+
+    setThreadLastViewedAt((previous) => {
+      let changed = false;
+      const next = { ...previous };
+
+      for (const thread of Object.values(threadsById)) {
+        if (next[thread.id] !== undefined || typeof thread.updatedAt !== "number") {
+          continue;
+        }
+
+        next[thread.id] = thread.updatedAt;
+        changed = true;
+      }
+
+      return changed ? next : previous;
+    });
+  }, [threadsById, threadsInitialized]);
+
+  useEffect(() => {
+    const unreadThreadIds = Object.values(threadsById)
+      .filter((thread) => {
+        const lastViewedAt = threadLastViewedAt[thread.id];
+        return thread.id !== activeThreadId
+          && typeof lastViewedAt === "number"
+          && thread.updatedAt > lastViewedAt;
+      })
+      .map((thread) => thread.id);
+    seedUnreadThreads(unreadThreadIds);
+  }, [activeThreadId, seedUnreadThreads, threadLastViewedAt, threadsById]);
+
+  useEffect(() => {
     if (!hasPersistedUiRef.current) {
       hasPersistedUiRef.current = true;
       return;
@@ -255,6 +336,7 @@ export default function App() {
       activeMode: activeThreadId ? currentMode : undefined,
       currentProject: projectManager.currentProject,
       customProjects: projectManager.customProjects,
+      threadLastViewedAt,
       draftThreads,
       composerDrafts: composer.composerDrafts,
       defaultPermissionMode: composer.defaultPermissionMode,
@@ -272,6 +354,7 @@ export default function App() {
     currentMode,
     projectManager.currentProject,
     projectManager.customProjects,
+    threadLastViewedAt,
     threadsById,
   ]);
 
