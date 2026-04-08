@@ -272,6 +272,8 @@ export interface ThreadHeaderProps {
   onToggleArchived: () => void;
   onToggleTag: (tagName: string) => void;
   onCreateTag: (name: string, color: string) => string | null;
+  onUpdateTag: (currentName: string, nextName: string, color: string) => string | null;
+  onDeleteTag: (name: string) => string | null;
 }
 
 export interface ThreadComposerProps {

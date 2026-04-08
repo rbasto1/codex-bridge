@@ -718,6 +718,8 @@ export default function App() {
               onToggleArchived={() => projectManager.toggleThreadArchived(currentThread.id)}
               onToggleTag={(tagName) => projectManager.toggleThreadTag(currentThread.id, tagName)}
               onCreateTag={projectManager.createTag}
+              onUpdateTag={projectManager.updateTag}
+              onDeleteTag={projectManager.deleteTag}
             />
 
             {composer.waitingOnUserAction ? (

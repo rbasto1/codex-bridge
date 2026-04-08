@@ -19,6 +19,7 @@ import type {
 } from "../types";
 
 const DONE_TAG: TagDefinition = { name: "done", color: "#22c55e" };
+const PROTECTED_TAG_NAMES = new Set(["done", "archived"]);
 
 function normalizeTags(tags: TagDefinition[]): TagDefinition[] {
   return tags.some((tag) => tag.name === DONE_TAG.name) ? tags : [...tags, DONE_TAG];
@@ -30,6 +31,31 @@ function normalizeSessionState(state?: ProjectSessionStateSaveData): ProjectSess
 
 function isHexColor(value: string): boolean {
   return /^#[0-9a-fA-F]{6}$/.test(value);
+}
+
+function updateSessionStateTags(
+  state: ProjectSessionStateSaveData,
+  updater: (tags: string[]) => string[],
+): ProjectSessionStateSaveData {
+  return {
+    threads: Object.fromEntries(
+      Object.entries(state.threads).flatMap(([threadId, threadState]) => {
+        const nextTags = Array.from(new Set(updater(threadState.tags ?? []).filter(Boolean)));
+        const nextArchived = Boolean(threadState.archived);
+        if (nextTags.length === 0 && !nextArchived) {
+          return [];
+        }
+
+        return [[
+          threadId,
+          {
+            ...(nextArchived ? { archived: true } : {}),
+            ...(nextTags.length > 0 ? { tags: nextTags } : {}),
+          },
+        ]];
+      }),
+    ),
+  };
 }
 
 function resolveRestoredProject(
@@ -332,6 +358,97 @@ export function useProjectManager(options: UseProjectManagerOptions) {
     return null;
   }
 
+  function applyTagMutationToProjects(updater: (tags: string[]) => string[]) {
+    const projects = Array.from(new Set([
+      currentProject,
+      ...projectOptions,
+      ...Object.keys(projectSessionStates),
+    ].filter(Boolean)));
+
+    setProjectSessionStates((previous) => (
+      Object.fromEntries(
+        Object.entries(previous).map(([project, state]) => [project, updateSessionStateTags(state, updater)]),
+      )
+    ));
+
+    void (async () => {
+      try {
+        const updates = await Promise.all(projects.map(async (project) => {
+          const currentState = projectSessionStates[project]
+            ? normalizeSessionState(projectSessionStates[project])
+            : normalizeSessionState(await fetchProjectSessionState(project).catch(() => ({ threads: {} })));
+          const nextState = updateSessionStateTags(currentState, updater);
+          await saveProjectSessionState(project, nextState);
+          return [project, nextState] as const;
+        }));
+
+        setProjectSessionStates((previous) => ({
+          ...previous,
+          ...Object.fromEntries(updates),
+        }));
+      } catch (error) {
+        setActionError(getErrorMessage(error));
+      }
+    })();
+  }
+
+  function updateTag(currentName: string, nextName: string, color: string): string | null {
+    const currentTag = projectTags.find((tag) => tag.name === currentName);
+    const trimmedName = nextName.trim();
+    const trimmedColor = color.trim();
+
+    if (!currentTag) {
+      return "Tag not found.";
+    }
+
+    if (PROTECTED_TAG_NAMES.has(currentTag.name.toLowerCase())) {
+      return "That tag cannot be edited.";
+    }
+
+    if (!trimmedName) {
+      return "Tag name is required.";
+    }
+
+    if (!isHexColor(trimmedColor)) {
+      return "Tag color must be a 6-digit hex value.";
+    }
+
+    if (projectTags.some((tag) => (
+      tag.name !== currentTag.name && tag.name.toLowerCase() === trimmedName.toLowerCase()
+    ))) {
+      return "A tag with that name already exists.";
+    }
+
+    const nextTags = projectTags.map((tag) => (
+      tag.name === currentTag.name ? { name: trimmedName, color: trimmedColor } : tag
+    ));
+    setProjectTags(nextTags);
+    persistProjectState(projectState, hiddenProjects, nextTags);
+
+    if (trimmedName !== currentTag.name) {
+      applyTagMutationToProjects((tags) => tags.map((tag) => (tag === currentTag.name ? trimmedName : tag)));
+    }
+
+    return null;
+  }
+
+  function deleteTag(name: string): string | null {
+    const currentTag = projectTags.find((tag) => tag.name === name);
+    if (!currentTag) {
+      return "Tag not found.";
+    }
+
+    if (PROTECTED_TAG_NAMES.has(currentTag.name.toLowerCase())) {
+      return "That tag cannot be deleted.";
+    }
+
+    const nextTags = projectTags.filter((tag) => tag.name !== currentTag.name);
+    setProjectTags(nextTags);
+    persistProjectState(projectState, hiddenProjects, nextTags);
+    applyTagMutationToProjects((tags) => tags.filter((tag) => tag !== currentTag.name));
+    return null;
+  }
+
   function updateCurrentProjectSessionState(
     updater: (state: ProjectSessionStateSaveData) => ProjectSessionStateSaveData,
   ) {
@@ -439,6 +556,7 @@ export function useProjectManager(options: UseProjectManagerOptions) {
     visibleProjects,
     addProject,
     createTag,
+    deleteTag,
     hideProject,
     removeProject,
     removeProjectIcon,
@@ -451,5 +569,6 @@ export function useProjectManager(options: UseProjectManagerOptions) {
     toggleThreadDone,
     toggleThreadTag,
     unhideProject,
+    updateTag,
   };
 }

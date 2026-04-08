@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { ThreadHeaderProps } from "../types";
 import { CreateTagModal } from "./CreateTagModal";
+import { ManageTagsModal } from "./ManageTagsModal";
 
 export function ThreadHeader(props: ThreadHeaderProps) {
   const {
@@ -15,12 +16,15 @@ export function ThreadHeader(props: ThreadHeaderProps) {
     onRename,
     onToggleArchived,
     onToggleTag,
+    onUpdateTag,
+    onDeleteTag,
   } = props;
   const [renameDraft, setRenameDraft] = useState(thread.name ?? thread.preview);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [creatingTag, setCreatingTag] = useState(false);
+  const [managingTags, setManagingTags] = useState(false);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const threadId = thread.id;
@@ -37,6 +41,7 @@ export function ThreadHeader(props: ThreadHeaderProps) {
     void threadId;
     setMenuOpen(false);
     setCreatingTag(false);
+    setManagingTags(false);
   }, [threadId]);
 
   useEffect(() => {
@@ -100,6 +105,17 @@ export function ThreadHeader(props: ThreadHeaderProps) {
   function handleCancelRename() {
     setRenameDraft(thread.name ?? thread.preview);
     setIsEditingTitle(false);
+  }
+
+  function handleStartCreatingTag() {
+    setMenuOpen(false);
+    setManagingTags(false);
+    setCreatingTag(true);
+  }
+
+  function handleOpenTagManager() {
+    setMenuOpen(false);
+    setManagingTags(true);
   }
 
   return (<>
@@ -188,12 +204,12 @@ export function ThreadHeader(props: ThreadHeaderProps) {
                       <button
                         type="button"
                         className="session-tag-option"
-                        onClick={() => setCreatingTag(true)}
+                        onClick={handleOpenTagManager}
                       >
                         <span className="session-tag-option-check">
                           <TagPlusGlyph />
                         </span>
-                        <span>Create new tag</span>
+                        <span>Manage tags</span>
                       </button>
                     </div>
                   </>
@@ -204,6 +220,16 @@ export function ThreadHeader(props: ThreadHeaderProps) {
         </div>
       </div>
     </section>
+
+    {managingTags ? (
+      <ManageTagsModal
+        tags={visibleAvailableTags}
+        onUpdateTag={onUpdateTag}
+        onDeleteTag={onDeleteTag}
+        onCreateNew={handleStartCreatingTag}
+        onClose={() => setManagingTags(false)}
+      />
+    ) : null}
 
     {creatingTag ? (
       <CreateTagModal
