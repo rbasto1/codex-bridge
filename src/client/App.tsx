@@ -255,6 +255,7 @@ export default function App() {
       draftThreads,
       composerDrafts: composer.composerDrafts,
       defaultPermissionMode: composer.defaultPermissionMode,
+      sendHotkey: composer.sendHotkey,
       threadControlDrafts: composer.threadControlDrafts,
       threadPermissionBaselines: composer.threadPermissionBaselines,
     });
@@ -262,6 +263,7 @@ export default function App() {
     activeThreadId,
     composer.composerDrafts,
     composer.defaultPermissionMode,
+    composer.sendHotkey,
     composer.threadControlDrafts,
     composer.threadPermissionBaselines,
     currentMode,
@@ -556,6 +558,7 @@ export default function App() {
         projectIconVersions={projectManager.projectIconVersions}
         projectOptions={projectManager.projectOptions}
         projectState={projectManager.projectState}
+        sendHotkey={composer.sendHotkey}
         sessionStateByThreadId={projectManager.projectSessionStateByThreadId}
         threadOrder={threadOrder}
         threadsById={threadsById}
@@ -568,6 +571,7 @@ export default function App() {
         onReorderProjects={projectManager.reorderProjects}
         onSaveProjectName={projectManager.saveProjectName}
         onSelectProject={(project) => void projectManager.selectProject(project)}
+        onSelectSendHotkey={composer.setSendHotkey}
         onStartThread={() => void handleStartThread()}
         onUnhideProject={projectManager.unhideProject}
         onUploadProjectIcon={projectManager.saveProjectIcon}
@@ -642,6 +646,7 @@ export default function App() {
               modelChoices={composer.modelChoices}
               modelsLoading={composer.modelsLoading}
               reasoningOptions={composer.reasoningOptions}
+              sendHotkey={composer.sendHotkey}
               selectedModel={composer.selectedModel}
               focusToken={composer.focusToken}
               onChangeComposer={composer.setComposerValue}

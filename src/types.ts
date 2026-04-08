@@ -19,6 +19,7 @@ import type {
 
 export type ThreadMode = "replay" | "live";
 export type ComposerAction = "send" | "steer" | "stop";
+export type SendHotkeyPreference = "enter" | "mod-enter";
 
 export interface PersistedUi {
   activeThreadId?: string | null;
@@ -28,6 +29,7 @@ export interface PersistedUi {
   draftThreads?: Thread[];
   composerDrafts?: Record<string, string>;
   defaultPermissionMode?: "standard" | "full";
+  sendHotkey?: SendHotkeyPreference;
   threadControlDrafts?: Record<string, ComposerControlDraft>;
   threadPermissionBaselines?: Record<string, PermissionBaseline>;
 }
@@ -280,6 +282,7 @@ export interface ThreadComposerProps {
   modelChoices: ModelChoice[];
   modelsLoading: boolean;
   reasoningOptions: ModelReasoningEffortOption[];
+  sendHotkey: SendHotkeyPreference;
   selectedModel: ModelOption | null;
   focusToken: number;
   onChangeComposer: (value: string) => void;
@@ -302,13 +305,14 @@ export interface ProjectSidebarProps {
   availableTags: TagDefinition[];
   backendStatus: AppServerStatus;
   currentProject: string;
-   envHome: string;
+  envHome: string;
   hiddenProjects: string[];
   listLoading: boolean;
   overflowProjects: string[];
   projectIconVersions: Record<string, number>;
   projectOptions: string[];
   projectState: ProjectStateEntry[];
+  sendHotkey: SendHotkeyPreference;
   sessionStateByThreadId: Record<string, ProjectThreadState>;
   threadOrder: string[];
   threadsById: Record<string, Thread>;
@@ -321,10 +325,17 @@ export interface ProjectSidebarProps {
   onReorderProjects: (projects: string[]) => void;
   onSaveProjectName: (project: string, name: string) => void;
   onSelectProject: (project: string) => void;
+  onSelectSendHotkey: (value: SendHotkeyPreference) => void;
   onStartThread: () => void;
   onUnhideProject: (project: string) => void;
   onUploadProjectIcon: (project: string, file: File) => Promise<void>;
   onToggleThreadDone: (threadId: string) => void;
+}
+
+export interface PreferencesModalProps {
+  sendHotkey: SendHotkeyPreference;
+  onClose: () => void;
+  onSelectSendHotkey: (value: SendHotkeyPreference) => void;
 }
 
 export interface ProjectContextMenuProps {

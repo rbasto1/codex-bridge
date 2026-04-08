@@ -16,6 +16,7 @@ import type {
   ComposerAction,
   ComposerControlDraft,
   PermissionBaseline,
+  SendHotkeyPreference,
   UseComposerStateOptions,
 } from "../types";
 
@@ -37,6 +38,7 @@ export function useComposerState(options: UseComposerStateOptions) {
   const [defaultPermissionMode, setDefaultPermissionMode] = useState<"standard" | "full">(
     initialUi.defaultPermissionMode ?? "standard",
   );
+  const [sendHotkey, setSendHotkey] = useState<SendHotkeyPreference>(initialUi.sendHotkey ?? "mod-enter");
   const [threadControlDrafts, setThreadControlDrafts] = useState<Record<string, ComposerControlDraft>>(
     initialUi.threadControlDrafts ?? {},
   );
@@ -288,6 +290,7 @@ export function useComposerState(options: UseComposerStateOptions) {
     modelChoices,
     modelsLoading,
     reasoningOptions,
+    sendHotkey,
     selectedModel,
     threadControlDrafts,
     threadPermissionBaselines,
@@ -302,6 +305,7 @@ export function useComposerState(options: UseComposerStateOptions) {
     selectComposerModel,
     setComposerBusy,
     setComposerDraft,
+    setSendHotkey,
     setComposerValue,
     setDefaultPermissionMode,
     setThreadPermissionBaselines,

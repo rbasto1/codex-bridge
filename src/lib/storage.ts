@@ -1,4 +1,4 @@
-import type { ComposerControlDraft, PersistedUi } from "../types";
+import type { ComposerControlDraft, PersistedUi, SendHotkeyPreference } from "../types";
 import { isRecord } from "../shared/codex.js";
 
 const STORAGE_KEY = "codex-bridge-ui";
@@ -84,6 +84,7 @@ function writeComposerDrafts(drafts: Record<string, string>): void {
 function sanitizePersistedUi(value: PersistedUi): PersistedUi {
   const threadControlDrafts = readThreadControlDrafts(value.threadControlDrafts);
   const threadPermissionBaselines = value.threadPermissionBaselines ?? {};
+  const sendHotkey = readSendHotkey(value.sendHotkey);
   const now = Date.now();
 
   const activeThreadIds = Object.keys(threadControlDrafts).filter((threadId) => {
@@ -93,11 +94,16 @@ function sanitizePersistedUi(value: PersistedUi): PersistedUi {
 
   return {
     ...value,
+    sendHotkey,
     threadControlDrafts: Object.fromEntries(activeThreadIds.map((threadId) => [threadId, threadControlDrafts[threadId]])),
     threadPermissionBaselines: Object.fromEntries(activeThreadIds
       .filter((threadId) => threadPermissionBaselines[threadId] !== undefined)
       .map((threadId) => [threadId, threadPermissionBaselines[threadId]])),
   };
+}
+
+function readSendHotkey(value: unknown): SendHotkeyPreference | undefined {
+  return value === "enter" || value === "mod-enter" ? value : undefined;
 }
 
 function readThreadControlDrafts(value: unknown): NonNullable<PersistedUi["threadControlDrafts"]> {

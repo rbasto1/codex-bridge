@@ -5,6 +5,10 @@ import type { ThreadComposerProps } from "../types";
 import { ComposerActionIcon } from "./graphics/ComposerActionIcon";
 import { PermissionShieldIcon } from "./graphics/PermissionShieldIcon";
 
+function isMobileViewport(): boolean {
+  return window.innerWidth < 768;
+}
+
 export function ThreadComposer(props: ThreadComposerProps) {
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -34,7 +38,12 @@ export function ThreadComposer(props: ThreadComposerProps) {
             value={props.composerValue}
             onChange={(event) => props.onChangeComposer(event.target.value)}
             onKeyDown={(event) => {
-              const isSubmitShortcut = event.key === "Enter" && (event.ctrlKey || event.altKey || event.metaKey);
+              if (event.key !== "Enter" || event.shiftKey || isMobileViewport()) {
+                return;
+              }
+
+              const hasSendModifier = event.ctrlKey || event.metaKey || event.altKey;
+              const isSubmitShortcut = hasSendModifier || props.sendHotkey === "enter";
               if (!isSubmitShortcut) {
                 return;
               }
