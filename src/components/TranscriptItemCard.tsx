@@ -32,7 +32,8 @@ export function TranscriptItemCard(props: TranscriptItemCardProps) {
   const copyText = item.type === "userMessage" ? renderUserInputs(item.content) : "";
   const isCopyableMessage = copyText.length > 0;
   const isForkableUserMessage = item.type === "userMessage" && copyText.length > 0;
-  const isExpandableRow = (itemType === "reasoning" || itemType === "filechange") && hasExpandableItemDetails(item);
+  const isExpandableRow = (itemType === "reasoning" || itemType === "filechange" || itemType === "websearch")
+    && hasExpandableItemDetails(item);
   const rowPreview = isExpandableRow ? formatExpandableItemPreview(item) : "";
 
   if (isExpandableRow) {
@@ -113,6 +114,10 @@ function formatExpandableItemPreview(item: ThreadItem): string {
     return "";
   }
 
+  if (itemType === "websearch") {
+    return firstNonEmptyLine(asString(item.query));
+  }
+
   return "";
 }
 
@@ -125,6 +130,10 @@ function hasExpandableItemDetails(item: ThreadItem): boolean {
 
   if (itemType === "filechange") {
     return extractFileChangePaths(item).length > 0 || firstNonEmptyLine(asString(item.summaryText)).length > 0;
+  }
+
+  if (itemType === "websearch") {
+    return firstNonEmptyLine(asString(item.query)).length > 0;
   }
 
   return false;

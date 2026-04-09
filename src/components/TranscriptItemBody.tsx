@@ -87,6 +87,8 @@ export function TranscriptItemBody(props: TranscriptItemBodyProps) {
         </div>
       );
     }
+    case "websearch":
+      return <pre className="code-slab">{JSON.stringify(item, null, 2)}</pre>;
     default:
       return <pre className="code-slab">{JSON.stringify(item, null, 2)}</pre>;
   }

@@ -1493,6 +1493,7 @@ button {
 /* Other item types — left accent bar */
 .item-commandExecution,
 .item-fileChange,
+.item-webSearch,
 .item-plan,
 .item-reasoning,
 .item-enteredReviewMode,
@@ -1503,6 +1504,7 @@ button {
 
 .item-commandExecution::before,
 .item-fileChange::before,
+.item-webSearch::before,
 .item-plan::before {
   content: "";
   position: absolute;

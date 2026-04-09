@@ -155,6 +155,7 @@ export function formatItemLabel(type: string): string {
     normalizedType === "usermessage"
     || normalizedType === "agentmessage"
     || normalizedType === "commandexecution"
+    || normalizedType === "websearch"
     || normalizedType === "contextcompaction"
   ) {
     return "";
