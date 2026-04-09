@@ -670,8 +670,16 @@ function listComposerSkills(cwd: string, query: string): SkillInfo[] {
     .map(({ score: _score, ...skill }) => skill);
 }
 
-function resolveMentionToken(token: string, cwd: string): UserInput | null {
+function splitComposerToken(token: string): { normalizedToken: string; suffix: string } {
   const normalizedToken = token.replace(/[.,!?;:)\]}]+$/g, "");
+  return {
+    normalizedToken,
+    suffix: token.slice(normalizedToken.length),
+  };
+}
+
+function resolveMentionToken(token: string, cwd: string): UserInput | null {
+  const { normalizedToken } = splitComposerToken(token);
   const expanded = normalizedToken.startsWith("~/")
     ? path.join(process.env.HOME ?? "", normalizedToken.slice(2))
     : normalizedToken;
@@ -695,7 +703,7 @@ function resolveMentionToken(token: string, cwd: string): UserInput | null {
 }
 
 function resolveSkillToken(token: string, cwd: string): UserInput | null {
-  const normalizedToken = token.replace(/[.,!?;:)\]}]+$/g, "");
+  const { normalizedToken } = splitComposerToken(token);
   const skill = listComposerSkills(cwd, normalizedToken).find((entry) => entry.name === normalizedToken);
   if (!skill) {
     return null;
@@ -709,17 +717,21 @@ function resolveSkillToken(token: string, cwd: string): UserInput | null {
 }
 
 function resolveComposerInputs(cwd: string, text: string): UserInput[] {
-  const matches = [...text.matchAll(/(^|\s)([@$])([^\s@$]+)/g)];
-  const resolvedInputs: UserInput[] = [];
-  let normalizedText = text;
+  const inputs: UserInput[] = [];
+  const pattern = /(^|\s)([@$])([^\s@$]+)/g;
+  let cursor = 0;
 
-  for (const match of matches) {
+  for (const match of text.matchAll(pattern)) {
+    const prefix = match[1] ?? "";
     const marker = match[2];
     const token = match[3];
-    if (!token) {
+    const matchIndex = match.index ?? -1;
+    if (!token || matchIndex < 0) {
       continue;
     }
 
+    const tokenStart = matchIndex + prefix.length;
+    const tokenEnd = tokenStart + marker.length + token.length;
     const resolved = marker === "@"
       ? resolveMentionToken(token, cwd)
       : resolveSkillToken(token, cwd);
@@ -728,12 +740,27 @@ function resolveComposerInputs(cwd: string, text: string): UserInput[] {
       continue;
     }
 
-    resolvedInputs.push(resolved);
-    normalizedText = normalizedText.replace(`${marker}${token}`, "").replace(/[ \t]{2,}/g, " ");
+    const leadingText = text.slice(cursor, tokenStart);
+    if (leadingText) {
+      inputs.push(createTextInput(leadingText));
+    }
+
+    inputs.push(resolved);
+
+    const { suffix } = splitComposerToken(token);
+    if (suffix) {
+      inputs.push(createTextInput(suffix));
+    }
+
+    cursor = tokenEnd;
   }
 
-  const trimmedText = normalizedText.replace(/\s+\n/g, "\n").replace(/\n\s+/g, "\n").trim();
-  return trimmedText ? [createTextInput(trimmedText), ...resolvedInputs] : resolvedInputs;
+  const trailingText = text.slice(cursor);
+  if (trailingText) {
+    inputs.push(createTextInput(trailingText));
+  }
+
+  return inputs;
 }
 
 app.get("/api/projects/state", (_request, response) => {

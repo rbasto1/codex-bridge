@@ -42,7 +42,7 @@ export function renderUserInputs(value: unknown): string {
   return value
     .map((input) => renderUserInput(input as UserInput))
     .filter(Boolean)
-    .join("\n");
+    .join("");
 }
 
 export function renderUserInput(input: UserInput): string {
