@@ -2096,6 +2096,12 @@ details[open] > .collapsible-summary::before {
   height: 16px;
 }
 
+.transcript-load-older {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 16px;
+}
+
 /* ── Banners ───────────────────────────────────── */
 .banner {
   display: flex;

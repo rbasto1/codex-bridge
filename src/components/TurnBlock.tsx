@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 import { useShallow } from "zustand/react/shallow";
 
 import { useAppStore } from "../client/store";
@@ -8,7 +10,7 @@ import { ApprovalCard } from "./ApprovalCard";
 import { CopyMessageButton } from "./CopyMessageButton";
 import { TranscriptItemCard } from "./TranscriptItemCard";
 
-export function TurnBlock(props: TurnBlockProps) {
+export const TurnBlock = memo(function TurnBlock(props: TurnBlockProps) {
   const { threadId, turnId, respondingRequestKey, onForkMessage, onRespond } = props;
   const turn = useAppStore((state) => state.turnsById[turnId]);
   const itemIds = useAppStore((state) => state.itemOrderByTurnId[turnId] ?? []);
@@ -86,4 +88,4 @@ export function TurnBlock(props: TurnBlockProps) {
       </div>
     </div>
   );
-}
+});

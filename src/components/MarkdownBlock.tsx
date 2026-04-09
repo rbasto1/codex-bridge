@@ -1,3 +1,4 @@
+import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -5,7 +6,7 @@ import remarkGfm from "remark-gfm";
 
 import type { MarkdownBlockProps } from "../types";
 
-export function MarkdownBlock(props: MarkdownBlockProps) {
+export const MarkdownBlock = memo(function MarkdownBlock(props: MarkdownBlockProps) {
   const text = props.preserveNewlines ? props.text.replace(/\n/g, "  \n") : props.text;
 
   return (
@@ -45,4 +46,4 @@ export function MarkdownBlock(props: MarkdownBlockProps) {
       </ReactMarkdown>
     </div>
   );
-}
+});

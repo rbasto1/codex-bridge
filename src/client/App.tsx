@@ -439,7 +439,7 @@ export default function App() {
     }
   }
 
-  async function handleForkMessage(threadId: string, turnId: string, itemId: string) {
+  const handleForkMessage = useCallback(async (threadId: string, turnId: string, itemId: string) => {
     const state = useAppStore.getState();
     const sourceThread = state.threadsById[threadId];
     const sourceItem = state.itemsById[itemId];
@@ -474,7 +474,7 @@ export default function App() {
       setSelectedThreadError(message);
       setActionError(message);
     }
-  }
+  }, [composer, hydrateThread, removeThread, setSelectedThreadError, updateThreadName]);
 
   async function handleSubmitComposer() {
     if (!activeThreadId || !currentThread || !composer.composerControlDraft) {
@@ -626,7 +626,7 @@ export default function App() {
     });
   }
 
-  async function handleRespondToRequest(request: BrowserServerRequest, body: RequestResponseBody) {
+  const handleRespondToRequest = useCallback(async (request: BrowserServerRequest, body: RequestResponseBody) => {
     setRespondingRequestKey(request.key);
     setActionError(null);
 
@@ -640,7 +640,7 @@ export default function App() {
     } finally {
       setRespondingRequestKey(null);
     }
-  }
+  }, []);
 
   async function handleRestartServer() {
     setActionError(null);

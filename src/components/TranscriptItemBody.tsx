@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 import type { TranscriptItemBodyProps } from "../types";
 import {
   asString,
@@ -9,7 +11,7 @@ import {
 } from "../lib/threads";
 import { MarkdownBlock } from "./MarkdownBlock";
 
-export function TranscriptItemBody(props: TranscriptItemBodyProps) {
+export const TranscriptItemBody = memo(function TranscriptItemBody(props: TranscriptItemBodyProps) {
   const { item } = props;
   const itemType = normalizeItemType(item.type);
 
@@ -92,4 +94,4 @@ export function TranscriptItemBody(props: TranscriptItemBodyProps) {
     default:
       return <pre className="code-slab">{JSON.stringify(item, null, 2)}</pre>;
   }
-}
+});

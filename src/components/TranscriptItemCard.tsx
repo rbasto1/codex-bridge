@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 import { useAppStore } from "../client/store";
 import type { TranscriptItemCardProps } from "../types";
 import type { ThreadItem } from "../shared/codex.js";
@@ -14,7 +16,7 @@ import { CopyMessageButton } from "./CopyMessageButton";
 import { ForkMessageButton } from "./ForkMessageButton";
 import { TranscriptItemBody } from "./TranscriptItemBody";
 
-export function TranscriptItemCard(props: TranscriptItemCardProps) {
+export const TranscriptItemCard = memo(function TranscriptItemCard(props: TranscriptItemCardProps) {
   const { threadId, turnId, itemId, respondingRequestKey, onForkMessage, onRespond } = props;
   const item = useAppStore((state) => state.itemsById[itemId]);
   const itemRequests = useAppStore((state) =>
@@ -99,7 +101,7 @@ export function TranscriptItemCard(props: TranscriptItemCardProps) {
       ))}
     </div>
   );
-}
+});
 
 function formatExpandableItemPreview(item: ThreadItem): string {
   const itemType = normalizeItemType(item.type);
