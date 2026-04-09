@@ -170,7 +170,7 @@ export function ThreadHeader(props: ThreadHeaderProps) {
               <div className="thread-menu-panel">
                 {currentThreadIsUiDraft ? (
                   <button type="button" className="thread-menu-item" onClick={onDeleteDraft}>
-                    Delete draft
+                    Discard draft
                   </button>
                 ) : (
                   <>

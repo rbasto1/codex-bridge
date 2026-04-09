@@ -735,7 +735,6 @@ export default function App() {
 
             <ScrollViewport key={currentThread.id} className="workspace-scroll">
               <div className="workspace-column">
-                <ThreadPlanPanel threadId={currentThread.id} />
                 <TranscriptView
                   threadId={currentThread.id}
                   respondingRequestKey={respondingRequestKey}
@@ -744,6 +743,10 @@ export default function App() {
                 />
               </div>
             </ScrollViewport>
+
+            <div className="workspace-footer">
+              <ThreadPlanPanel threadId={currentThread.id} />
+            </div>
 
             <ThreadComposer
               activeThreadId={activeThreadId}

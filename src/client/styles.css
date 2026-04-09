@@ -897,6 +897,14 @@ button {
   margin: 0 auto;
 }
 
+.workspace-footer {
+  width: min(100%, 800px);
+  margin: 0 auto;
+  padding: 12px 24px 0;
+  margin-bottom: -1px;
+  flex-shrink: 0;
+}
+
 /* project-bar removed — project input moved to sidebar modal */
 
 /* ── Thread header ─────────────────────────────── */
@@ -1096,9 +1104,8 @@ button {
 
 /* ── Transcript pane ───────────────────────────── */
 .thread-plan-panel {
-  margin-bottom: 18px;
   border: 1px solid var(--border-weak);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   background: var(--surface-raised-stronger);
   overflow: hidden;
 }
@@ -1109,6 +1116,7 @@ button {
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
+  border-radius: calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px) 0 0;
   cursor: pointer;
   list-style: none;
   user-select: none;
@@ -1145,7 +1153,7 @@ button {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 0 14px 14px;
+  padding: 0 14px 8px;
   border-top: 1px solid var(--border-weaker);
 }
 
@@ -1893,7 +1901,7 @@ details[open] > .collapsible-summary::before {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 12px 24px 4px;
+  padding: 0 24px 4px;
   background: var(--bg-base);
   flex-shrink: 0;
 }
@@ -2221,8 +2229,13 @@ details[open] > .collapsible-summary::before {
     padding: 0 16px;
   }
 
+  .workspace-footer {
+    padding: 12px 16px 0;
+    margin-bottom: -1px;
+  }
+
   .composer-shell {
-    padding: 12px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+    padding: 0 16px calc(10px + env(safe-area-inset-bottom, 0px));
   }
 
   .composer-control-row {
